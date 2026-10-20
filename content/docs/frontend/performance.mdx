@@ -1,0 +1,96 @@
+---
+title: Performance
+description: The performance metrics that matter for an AI frontend, how to measure them, and the specific techniques that keep long conversations and large answers fast.
+---
+
+Users judge an assistant's speed mostly by two things: how fast text starts appearing, and whether the page stays smooth while it streams. Most of the delay before the first token is on the server, but the frontend can add a surprising amount of its own, and it fully owns smoothness.
+
+## Metrics
+
+| Metric | What it measures | Target |
+| --- | --- | --- |
+| **Time to first token (TTFT), client-side** | From pressing Enter to the first character on screen | p50 about 1 s, p95 under 3 s |
+| **Frontend overhead on TTFT** | Client TTFT minus server TTFT | Under 100 ms |
+| **Interaction to Next Paint (INP)** | Responsiveness to clicks and typing, including during streaming | Under 200 ms |
+| **Largest Contentful Paint (LCP)** | How fast the app shell loads | Under 2.5 s |
+| **Frame drops during streaming** | Smoothness while tokens arrive | No long tasks over 50 ms |
+| **Opening a long conversation** | Time to render a chat with 200 messages | Under 500 ms |
+
+Measure client-side TTFT with `performance.mark()` at send and at the first rendered token, and report it with the message's trace ID. Comparing it to the server's own TTFT tells you whether a slowdown is in the network, the server, or your rendering.
+
+```ts
+performance.mark(`send-${clientId}`);
+// in the first token handler
+performance.mark(`first-token-${clientId}`);
+const m = performance.measure('ttft', `send-${clientId}`, `first-token-${clientId}`);
+reportMetric('client_ttft_ms', m.duration, { traceId });
+```
+
+## Where the frontend adds delay
+
+| Cause | Fix |
+| --- | --- |
+| Refreshing an auth token before sending | Refresh tokens in the background before they expire |
+| Waiting for an upload to finish before sending | Start uploads on attach, not on send |
+| Creating the conversation in a separate request before the first message | Let the first message create the conversation in one request |
+| Rendering the whole message list on every token | Memoize completed messages, re-render only the streaming one |
+| Heavy markdown and highlighting in the streaming path | Highlight only after code fences close, lazy load highlighters |
+| Response buffered by a proxy or service worker | Make sure nothing between server and client buffers `text/event-stream` |
+
+## Long conversations
+
+A conversation with hundreds of messages, code blocks, and tables can have tens of thousands of DOM nodes.
+
+- **Paginate history.** Load the last 30 to 50 messages, and load older ones when the user scrolls up. Keep the scroll position stable when older messages are inserted above.
+- **Virtualize** only if needed. Virtualizing variable-height chat messages is complex and breaks browser find-in-page. Try pagination and `content-visibility: auto` first.
+- **Use `content-visibility: auto`** on each message, with a reasonable `contain-intrinsic-size`. The browser skips layout and paint for off-screen messages, which is often enough without virtualization.
+- **Collapse very long answers** after they finish, with a "Show more".
+
+## Bundle size
+
+Chat apps tend to accumulate large dependencies: markdown parsers, syntax highlighters with many grammars, math rendering, diagram libraries, PDF previewers.
+
+| Dependency | Typical approach |
+| --- | --- |
+| Markdown parser | Load with the chat route, since every answer needs it |
+| Syntax highlighter | Lazy load on first code block. Load grammars per language on demand |
+| KaTeX | Lazy load when math is detected |
+| Mermaid | Lazy load when a mermaid block is detected. It is one of the largest libraries you might add |
+| PDF viewer | Lazy load when a source panel opens a PDF |
+
+Check bundle size in CI with a budget, for example a hard limit on the main chat route's JavaScript, so a casual import of a large library fails the build instead of slowing every user.
+
+## Network
+
+- Use **HTTP/2 or HTTP/3**, so the stream and parallel requests share a connection.
+- Enable **compression** for normal responses, but check it does not buffer the event stream. Some compression middleware waits for a full buffer before writing.
+- **Preconnect** to the API origin early on page load with `<link rel="preconnect">`.
+- Load conversation data in parallel with the app shell, not after it.
+
+## Perceived performance
+
+Some techniques do not make anything faster but make waits feel shorter.
+
+- Show the user's message instantly (optimistic update).
+- Show real status steps before the first token: "Searching", "Reading 4 sources", "Writing".
+- Show citations and source titles as soon as retrieval finishes, before the answer text starts. Users start reading sources while the model writes.
+- Avoid layout shift when the answer starts. Reserve space for the assistant message header so text does not jump.
+
+## Profiling a slow stream
+
+When users report that answers feel slow or janky:
+
+1. Compare client TTFT and server TTFT for the same trace IDs. If the gap is large, look at the network path and buffering.
+2. Record a performance profile in browser dev tools during a long streamed answer. Look for long tasks during token handling.
+3. Check how many components re-render per token with React DevTools' profiler. It should be one message, not the whole list.
+4. Test on a mid-range laptop and a mid-range phone with CPU throttling, not only on a developer machine.
+
+## Checklist
+
+- [ ] Client TTFT is measured and reported with the trace ID.
+- [ ] Nothing waits on avoidable requests before sending a message.
+- [ ] Only the streaming message re-renders during streaming.
+- [ ] Long conversations paginate and use `content-visibility`.
+- [ ] Highlighters, KaTeX, Mermaid, and PDF viewers are lazy loaded.
+- [ ] CI enforces a bundle size budget.
+- [ ] Sources are shown as soon as retrieval completes.
