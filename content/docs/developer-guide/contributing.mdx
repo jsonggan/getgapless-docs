@@ -1,0 +1,112 @@
+---
+title: Contributing
+description: The workflow for changes to the assistant, including branches, pull requests, review checklists by change type, and step-by-step guides for changing prompts, models, tools, and connectors.
+---
+
+This page describes how changes get from an idea to production. The process is light for ordinary code and stricter for changes that alter the assistant's behavior or reach into other systems.
+
+## Workflow
+
+1. Create a branch from `main`.
+2. Make the change with tests. Run `make lint test` locally.
+3. Open a pull request using the template. Describe what changed and why.
+4. CI runs tests, scans, and the eval sets relevant to your change. The eval report is posted on the pull request.
+5. Get review from the owners of the areas you touched (`CODEOWNERS` assigns them).
+6. Merge. Deploys to staging, then production, run automatically.
+7. If the change is a behavior change, start its rollout through config. See [Rollouts](/docs/deployment/rollouts).
+
+Keep pull requests small. A prompt change, a retrieval change, and a UI change in one pull request makes eval results impossible to attribute.
+
+## Pull request template
+
+```markdown
+## What and why
+<!-- One paragraph. Link the issue or user report. -->
+
+## Type of change
+- [ ] Code only (no behavior change)
+- [ ] Prompt
+- [ ] Model route or provider
+- [ ] Retrieval or ingestion
+- [ ] Guardrail
+- [ ] Tool or connector
+- [ ] Infrastructure
+
+## Evaluation
+<!-- Eval report is posted automatically. Summarize: what improved, what got worse, why it is acceptable. -->
+
+## Risk and rollout
+<!-- Behavior changes: rollout plan and rollback. Tools and connectors: security review link. -->
+
+## Docs
+- [ ] Updated docs, ADRs, system card, or runbooks as needed
+```
+
+## Review checklist by change type
+
+| Change | Reviewers check |
+| --- | --- |
+| Any | Tests, error handling, no content in logs, request context passed through |
+| Prompt | Eval report reviewed including flipped cases and safety. New version file, old untouched. No contradictions with existing rules. Token count change acceptable |
+| Model route | Eval across all sets and slices. Fallbacks evaluated. Data terms and region confirmed. Cost and latency impact |
+| Retrieval or ingestion | Retrieval eval (recall at both stages). Re-indexing plan if needed. ACL handling unchanged or tested |
+| Guardrail | Evaluated in both directions: catch rate and false positives. Fail-open or closed decision explicit |
+| Tool | Read or write classification. Confirmation design. Strict schema. Executes as user. Audit events. Idempotency. Security review |
+| Connector | Permission mapping tested with fixtures. Read-only scopes. Deletion and reconciliation. Rate limits respected |
+| Frontend rendering | Output still goes through the safe renderer. Accessibility checks pass |
+
+## Changing a prompt
+
+1. Copy the current version to a new file: `prompts/answer/v15.md`.
+2. Make your edit in the new file.
+3. Point the eval or dev config at the new version: `make eval SET=golden PROMPT=answer@v15`.
+4. Read the flipped cases, not just the averages. Adjust and repeat.
+5. Open a pull request that adds the new version and sets it as the canary in `config/prompts.yaml`.
+6. After merge, roll out with the canary stages, then promote it to production in config.
+7. Remove the old version from config once the new one is fully rolled out. Keep the file. Old answers reference it.
+
+## Changing a model
+
+1. Confirm the model is approved: data terms, regions, and vendor review. If it is a new provider, legal or privacy sign-off comes first. See [Vendors and contracts](/docs/compliance/vendors).
+2. Add the model to the gateway's provider adapters if needed, with contract tests.
+3. Run all eval sets with the new model, current prompts first. Then adjust prompts if needed, as a separate prompt version.
+4. Update `config/model-routes.yaml` with the new model as a canary.
+5. Update the model records in `docs/governance/models.md`.
+6. Roll out with canary stages.
+
+## Adding a tool
+
+1. Write a short design note: what the tool does, read or write, target system, scopes needed, what could go wrong if misused.
+2. Get a security review for write tools.
+3. Define the schema with the strictest types possible, and a result mapper that returns only needed fields.
+4. Implement execution in the tool service, using the user's delegated token, with idempotency and audit events.
+5. Add eval cases: correct use, wrong use, and injection attempts that try to trigger it.
+6. Ship behind a feature flag, enabled for internal users first.
+7. Update the use case documentation and system card.
+
+## Adding a connector
+
+1. Implement the connector interface: list, changes, fetch, and principal resolution.
+2. Map permissions to principals, and test with fixtures for every sharing model the source supports.
+3. Handle deletions with reconciliation.
+4. Respect source rate limits, and expose progress for initial syncs.
+5. Add canary documents for freshness monitoring.
+6. Document admin setup: required consent, scopes, and scope configuration.
+
+## Updating these docs
+
+These docs describe the system as it is meant to be built. When the system changes in a way that makes a page wrong, update the page in the same pull request.
+
+- Keep the existing page structure: a short opening on what the page covers, then sections, then a checklist.
+- Use the [glossary](/docs/architecture/glossary) terms consistently.
+- Write diagrams in Mermaid, so agents read the same source people see rendered.
+- In frontmatter `description` fields, avoid colons, which break the YAML.
+
+## Checklist
+
+- [ ] Pull requests are small and of one change type.
+- [ ] The PR template is filled in, including evaluation and rollout.
+- [ ] Reviewers use the checklist for the change type.
+- [ ] Prompt and model changes follow their step-by-step guides.
+- [ ] New tools and connectors get design notes, security review, tests, and flags.
+- [ ] Docs, ADRs, system card, and runbooks are updated with the change.
