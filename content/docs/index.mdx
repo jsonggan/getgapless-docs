@@ -25,6 +25,15 @@ Pick a topic in the sidebar. Each page is self-contained, so you can start anywh
 
 Every page has one URL. The same URL serves HTML to browsers and markdown to agents, so your agent can read a page and send you back to the same link.
 
+```mermaid
+flowchart LR
+  Browser[Browser] -->|"GET /docs/rag"| Site[Site]
+  Agent[Agent] -->|"GET /docs/rag<br/>Accept: text/markdown"| Site
+  Agent -->|"GET /docs/rag.md"| Site
+  Site -->|HTML| Browser
+  Site -->|Markdown| Agent
+```
+
 | Need | Use |
 | --- | --- |
 | Index of all topics and their URLs | `/llms.txt` |
