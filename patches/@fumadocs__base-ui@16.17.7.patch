@@ -1,0 +1,15 @@
+diff --git a/dist/components/toc/default.js b/dist/components/toc/default.js
+index ae91e57cca6d6f55bd4b33367cc8575f98c00bdc..be4350816252ddbd21e43e0ffcc811474afcb1dc 100644
+--- a/dist/components/toc/default.js
++++ b/dist/components/toc/default.js
+@@ -147,8 +147,8 @@ function ThumbTrack({ computed, thumbBox }) {
+ 				endIdx,
+ 				isUp
+ 			};
+-			out["--offset-distance"] = isUp ? `${computed.itemLineLengths[startIdx][0]}px` : `${computed.itemLineLengths[endIdx][1]}px`;
+-			out["--opacity"] = items[isUp ? startIdx : endIdx].original._step !== void 0 ? "0" : "1";
++			out["--offset-distance"] = `${computed.itemLineLengths[startIdx][0]}px`;
++			out["--opacity"] = items[startIdx].original._step !== void 0 ? "0" : "1";
+ 		}
+ 		return out;
+ 	}

@@ -1,0 +1,2 @@
+patchedDependencies:
+  '@fumadocs/base-ui@16.17.7': patches/@fumadocs__base-ui@16.17.7.patch
