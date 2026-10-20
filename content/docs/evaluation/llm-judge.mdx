@@ -1,0 +1,132 @@
+---
+title: LLM-as-Judge
+description: How to use a model to grade the assistant's answers reliably, how to write judge prompts, how to calibrate judges against human reviewers, and where judges fail.
+---
+
+Many quality criteria, such as "is this claim supported by the source?", cannot be checked with string matching. Humans can judge them but are slow and expensive. An **LLM judge** is a model prompted to grade outputs against specific criteria. Used carefully, it agrees with human reviewers often enough to run on every change.
+
+## When to use a judge
+
+| Check | Use |
+| --- | --- |
+| Exact facts, codes, forbidden strings | Code. Deterministic and free |
+| Retrieval hits | Code, against labeled documents |
+| Answer contains specific facts | Judge, per answer point |
+| Claims supported by sources | Judge, per claim |
+| Tone, clarity, helpfulness | Judge with a clear rubric, calibrated often |
+| Domain correctness beyond the sources | Human expert |
+
+Use code wherever possible. Use a judge for semantic checks. Use humans to calibrate the judge and for decisions that matter most.
+
+## Design principles
+
+**Narrow questions beat broad ones.** "Rate this answer from 1 to 10" gives noisy, inconsistent scores. "Does the answer state that the hotel limit in Singapore is SGD 350? Answer present, partial, or absent" gives reliable ones.
+
+**Binary or small scales.** Pass or fail, or a 3-point scale with written definitions. Judges are poorly calibrated on 10-point scales.
+
+**Reasoning before the verdict.** Ask the judge to explain briefly, then give the verdict. This improves accuracy and gives you something to read when you disagree.
+
+**Structured output.** Return JSON with a fixed schema, so results are machine-readable.
+
+**A different model family** from the one being judged, where possible. Models tend to rate their own style favorably.
+
+**Low temperature** for consistency.
+
+## Example: answer point coverage
+
+```text
+You are grading an AI assistant's answer for factual coverage.
+
+<question>{{question}}</question>
+<answer>{{answer}}</answer>
+<answer_point>{{point}}</answer_point>
+
+Decide whether the answer conveys the answer point.
+- "present": the answer states the point, in any wording, without contradicting it.
+- "partial": the answer states part of the point, or states it with a missing condition
+  that changes its meaning.
+- "absent": the answer does not state the point, or contradicts it.
+
+Do not judge style or other content. Only this point.
+
+Respond in JSON: {"reasoning": "<one or two sentences>", "verdict": "present" | "partial" | "absent"}
+```
+
+Run it once per answer point, not once for all points together. Per-point calls are more accurate and tell you exactly what was missing.
+
+## Example: groundedness
+
+Groundedness is a two-step judge.
+
+1. **Extract claims**: split the answer into atomic factual claims. "The hotel limit is SGD 350 per night and requires manager approval above that" becomes two claims.
+2. **Verify each claim** against the sources:
+
+```text
+<sources>{{sources}}</sources>
+<claim>{{claim}}</claim>
+
+Is the claim fully supported by the sources?
+- "supported": the sources state it, or it follows directly from them.
+- "unsupported": the sources do not state it.
+- "contradicted": the sources state something different.
+- "general": the claim is general knowledge, not a company-specific fact.
+
+Respond in JSON: {"reasoning": "...", "verdict": "...", "source_n": <number or null>}
+```
+
+Groundedness score = supported claims divided by company-specific claims (excluding `general`). Any `contradicted` claim should also be flagged separately, because those are the most harmful errors.
+
+## Calibrating against humans
+
+A judge is a measuring instrument. You must check that it measures what you think.
+
+1. Take 100 to 200 answers from the golden set.
+2. Have two domain experts grade them independently with the same rubric.
+3. Measure **human agreement** first. If two humans agree only 75% of the time, the rubric is ambiguous. Fix the rubric before blaming the judge.
+4. Run the judge on the same answers and measure agreement with the human consensus. Use Cohen's kappa or simply percent agreement per verdict.
+5. Read every disagreement. Adjust the judge prompt: add definitions, examples of borderline cases, or split the question.
+6. Repeat until judge-human agreement is close to human-human agreement.
+
+| Agreement level | Meaning |
+| --- | --- |
+| Judge agrees with humans about as often as humans agree with each other | Usable for automated gates |
+| Noticeably lower | Usable for trends, not for blocking releases |
+| Much lower | Rewrite the rubric or the judge prompt |
+
+Re-calibrate when you change the judge model, the judge prompt, or the kind of questions in the dataset.
+
+## Known judge biases
+
+| Bias | Effect | Mitigation |
+| --- | --- | --- |
+| Length bias | Longer answers rated higher | Grade specific points, not overall quality |
+| Self-preference | Prefers outputs from its own model family | Use a different family as judge |
+| Position bias | In A/B comparisons, prefers the first (or second) option | Run both orders and average, or use absolute grading |
+| Leniency | Marks partial answers as present | Define "partial" sharply with examples |
+| Confident nonsense | Rates fluent but wrong answers well when it lacks the facts | Always give the judge the sources and expected points |
+
+## Pairwise comparison
+
+For subjective qualities, comparing two answers ("which is clearer, A or B?") is more reliable than absolute scores. Use pairwise judging for style and clarity decisions between two prompt versions, always running both orderings. For correctness and grounding, use absolute, per-point grading.
+
+## Cost and speed
+
+Judges multiply eval cost: 300 cases with 4 answer points each, plus groundedness with 5 claims each, is several thousand judge calls per run.
+
+- Use the provider's **batch API** for scheduled and nightly runs.
+- Run the **smoke set** on every commit, and the full golden set on pull requests that touch prompts, models, or retrieval.
+- **Cache judge results** keyed on the exact inputs. Unchanged answers do not need re-judging.
+
+## Human review stays
+
+Judges do not replace human review. Keep a weekly review where domain experts grade a sample of production answers, especially negative-feedback ones. It catches what the rubric never anticipated, and it is the source of calibration data and new test cases.
+
+## Checklist
+
+- [ ] Deterministic checks use code, not judges.
+- [ ] Judge questions are narrow, with small scales and written definitions.
+- [ ] Judges return reasoning and a verdict in JSON.
+- [ ] The judge model differs from the judged model where possible.
+- [ ] Judges are calibrated against two human graders, and recalibrated after changes.
+- [ ] Known biases are mitigated in the rubric design.
+- [ ] Human review of production samples continues weekly.

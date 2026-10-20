@@ -1,0 +1,122 @@
+---
+title: Datasets
+description: How to build evaluation datasets that represent real usage, what each test case contains, how many cases you need, and how to keep datasets current and safe.
+---
+
+An evaluation is only as good as its dataset. A dataset of 50 easy questions written by the engineering team will pass every change and catch nothing. A dataset built from real user questions, with answers checked by domain experts, catches real regressions.
+
+## Types of datasets
+
+| Dataset | Purpose | Size | Source |
+| --- | --- | --- | --- |
+| **Golden set** | Representative sample of real use. The main quality score | 200 to 500 cases | Real questions, stratified by topic and difficulty |
+| **Regression set** | Cases that once failed and were fixed | Grows over time | Bug reports, negative feedback |
+| **Safety set** | Harmful requests, injection attempts, data leak attempts | 100 to 300 cases | Red teaming, public attack collections, incidents |
+| **Retrieval set** | Questions labeled with the documents that answer them | 200+ cases | Golden set questions plus labeling |
+| **Component sets** | Query rewrite pairs, guardrail examples, tool selection cases | 50 to 200 each | Per component |
+| **Smoke set** | A small, fast subset for every commit | 20 to 50 cases | Picked from the golden set |
+
+## Anatomy of a test case
+
+```yaml
+id: hr-leave-de-003
+question: "How many weeks of parental leave do I get in Germany?"
+user_context:
+  department: Engineering
+  country: DE
+  groups: [all-staff, eng, de-employees]
+history: []                       # earlier turns, for follow-up cases
+expected:
+  answer_points:                  # facts the answer must contain
+    - "Statutory parental leave (Elternzeit) up to 3 years per child"
+    - "Company tops up pay to 100% for the first 12 weeks"
+  must_cite_documents: [doc_hr_de_parental_2025]
+  must_not_contain:
+    - "16 weeks"                  # the old, superseded policy
+  should_refuse: false
+tags: [hr, de, policy, multi-fact]
+difficulty: medium
+owner: hr-team
+added: 2026-02-11
+origin: feedback msg_8kq2 (de-identified)
+```
+
+Notes on the fields:
+
+- **`answer_points` instead of a full reference answer.** Grading "does it contain these facts" is far more reliable than "is it similar to this paragraph". Many correct answers are worded differently.
+- **`user_context`** makes permissions part of the test. The same question asked by a user without HR access should get a different answer.
+- **`must_not_contain`** catches known wrong answers, such as an outdated policy.
+- **`origin`** makes the case traceable, so it can be removed if the source data must be deleted.
+
+## Building the golden set
+
+1. **Collect real questions.** From pilot users, support tickets, search logs, and early production traffic. Real users ask shorter, vaguer, and more varied questions than engineers expect.
+2. **Cluster and sample.** Group by topic (HR, IT, finance, product) and type (lookup, comparison, procedure, follow-up, out of scope). Sample from each cluster in proportion to real traffic, then add extra cases for important low-frequency topics.
+3. **Write expected answers with domain experts.** An engineer drafts answer points from the source documents. A domain expert confirms or corrects them. Budget for this. It is the most valuable hour of expert time in the project.
+4. **Label the supporting documents** for retrieval evaluation.
+5. **Add hard cases deliberately:**
+
+| Case type | Example |
+| --- | --- |
+| Not answerable | A question about a policy that does not exist in the documents |
+| Conflicting sources | Old and new versions of a policy both in the index |
+| Multi-hop | Needs facts from two documents: "Can contractors in Singapore expense a client dinner?" |
+| Follow-up | "And for Tokyo?" after a previous turn |
+| Permission-dependent | The answer is in a document the test user cannot see |
+| Exact term | An error code, form number, or product SKU |
+| Ambiguous | "What is the deadline?" with several possible deadlines |
+| Non-English | Questions in each language your users write in |
+| Tool use | "Open a ticket for my broken monitor" |
+
+## How many cases
+
+Small datasets give noisy scores. With 50 cases, one case is 2 percentage points, and random variation between runs can easily move the score by 4 to 6 points. You cannot distinguish a real improvement from noise.
+
+| Cases | Roughly detects a change of | Use |
+| --- | --- | --- |
+| 50 | 10+ points | Smoke tests only |
+| 200 | 5 to 7 points | Minimum for decisions |
+| 500 | 3 to 4 points | Comfortable for model and prompt decisions |
+| 1,000+ | 2 points | Large teams, fine-grained tuning |
+
+Report scores per tag as well as overall. A change can improve HR questions and break IT questions while the average stays flat.
+
+## Synthetic data
+
+Generating questions with a model from your documents is fast and fills gaps, but has known problems:
+
+- Synthetic questions copy the document's wording, so they are too easy for retrieval.
+- They miss the vague, misspelled, context-dependent questions real users ask.
+- The answers inherit the generating model's errors.
+
+Use synthetic data to **expand coverage**, such as one question per important document, not to replace real questions. Have a human review a sample of every synthetic batch, and keep synthetic cases tagged so you can score them separately.
+
+## Keeping datasets current
+
+Datasets go stale as documents change. A golden answer about the 2025 travel policy is wrong once the 2026 policy is published.
+
+- Link each case to its supporting documents. When a document changes, flag its cases for review.
+- Review the golden set quarterly with domain owners.
+- Retire cases that no longer represent real use.
+- Add new cases from production every week: negative feedback, regenerations, and escalations are the best source.
+- Version the dataset. Every eval result records the dataset version, so scores are comparable only across runs on the same version.
+
+## Privacy and access
+
+Datasets built from production contain real questions, which can contain personal or confidential information.
+
+- De-identify cases taken from production: replace names, IDs, and specifics that are not needed for the test.
+- Get explicit approval for including real conversation content, and follow your retention rules. See [Retention and deletion](/docs/data/retention).
+- Store datasets with access controls matching their sensitivity, not in a public repository.
+- For multi-tenant SaaS, never put one customer's data into a shared dataset. Build per-tenant sets, or shared sets from synthetic or public-domain content.
+
+## Checklist
+
+- [ ] Golden, regression, safety, and retrieval datasets exist, each with an owner.
+- [ ] The golden set comes from real questions and has at least 200 cases.
+- [ ] Expected answers are written as answer points and confirmed by domain experts.
+- [ ] Cases include user context so permissions are tested.
+- [ ] Hard case types are deliberately covered.
+- [ ] Scores are reported per tag, not only overall.
+- [ ] Datasets are versioned, reviewed quarterly, and fed weekly from production.
+- [ ] Production-derived cases are de-identified, traceable, and access-controlled.
