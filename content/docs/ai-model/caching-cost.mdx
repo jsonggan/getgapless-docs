@@ -1,0 +1,118 @@
+---
+title: Caching and Cost
+description: Where the money goes in an AI assistant, how to estimate it, and the caching, routing, and design techniques that reduce cost and latency without hurting quality.
+---
+
+Model calls are usually the largest variable cost in an AI system, and they scale with usage in ways that surprise finance teams. This page shows how to estimate cost, where it really goes, and how to reduce it.
+
+## How cost is calculated
+
+Providers charge per token, with separate prices for:
+
+- **Input tokens**: everything you send. Usually the larger share in RAG systems, because prompts carry sources and history.
+- **Output tokens**: what the model writes. Several times more expensive per token than input.
+- **Cached input tokens**: input that matches a recently cached prefix. Much cheaper than normal input.
+
+Embeddings, re-ranking, and guardrail models have their own, usually smaller, costs.
+
+## Estimating cost per answer
+
+Work it out with your real numbers. Example for one chat turn:
+
+| Call | Input tokens | Output tokens | Notes |
+| --- | --- | --- | --- |
+| Query rewrite (small model) | 800 | 30 | Skipped on first message |
+| Input guardrail (small model or classifier) | 300 | 5 | |
+| Answer (large model) | 9,000 | 400 | Instructions 1,500, sources 5,000, history 2,000, question 500 |
+| Output guardrail (small model) | 1,200 | 10 | |
+| Title generation (small model) | 600 | 15 | First turn only |
+| Query embedding | 30 | | |
+| Re-rank 50 candidates | about 25,000 | | Priced per search or per token by the provider |
+
+Then:
+
+```text
+cost per turn   = sum over calls of (input x input price + output x output price)
+cost per month  = turns per user per day x active users x working days x cost per turn
+```
+
+Make a spreadsheet with your prices and run it with realistic usage: for example 2,000 active users, 8 turns per day each, 21 working days. The answer model's input tokens usually dominate, which is why context size is the main cost lever.
+
+## Where cost hides
+
+| Hidden cost | Example |
+| --- | --- |
+| Agent loops | A 6-step agent turn resends the growing context 6 times |
+| Long conversations | History grows every turn unless trimmed |
+| Retries | Retries on timeouts pay for tokens again |
+| Evals and batch jobs | Running a 500-case eval with an LLM judge on every pull request |
+| Re-indexing | Re-embedding the whole corpus after an embedding model change |
+| Abandoned streams | Generating to the end after the user closed the tab |
+| Oversized models on small tasks | Using the large model to write conversation titles |
+
+## Prompt caching
+
+Most providers cache the beginning of a prompt. If the next request starts with the same tokens, those tokens are processed faster and billed at a discount.
+
+To benefit:
+
+- **Put stable content first**: system instructions, tenant additions, tool definitions. Then retrieved sources, history, and the question.
+- **Keep the stable prefix byte-identical.** A timestamp or request ID in the system prompt breaks the cache on every call. Put the date at the end of the instructions block or in the user message, and only at day granularity.
+- **Mark cache breakpoints** if your provider requires explicit markers.
+- **Check the cache hit rate** in usage data. Many teams think they are caching and are not.
+
+Prompt caching helps most for agents, where each step resends the same long prefix, and for long documents asked about repeatedly.
+
+## Response caching
+
+Caching complete answers for repeated questions sounds attractive but is risky in an enterprise assistant.
+
+| Risk | Why |
+| --- | --- |
+| Permission leaks | Two users ask the same question but may see different sources |
+| Stale answers | The policy changed, the cached answer did not |
+| Tenant leaks | Same question text, different company |
+
+Only cache answers when **all** of these hold: the cache key includes tenant ID, a hash of the user's permission set (or the exact set of source chunk IDs and their versions), and the prompt version, and the cache entry expires within hours. In practice, response caching works well for a few high-traffic questions over public, company-wide content, such as an "IT help" FAQ. It is rarely worth it in general.
+
+**Safer caches with good returns:**
+
+| Cache | Key | Benefit |
+| --- | --- | --- |
+| Query embeddings | Hash of normalized query text and embedding model | Saves an embedding call for repeated questions |
+| Query rewrites | Hash of the last turns and the new message | Saves a small model call on retries and regenerations |
+| Resolved user principals | User ID, short expiry | Faster permission filtering |
+| Document parsing output | Content hash | Avoids re-parsing unchanged files |
+| Chunk embeddings | Content hash and model | Avoids re-embedding unchanged chunks |
+
+## Reducing cost without losing quality
+
+In rough order of impact for typical RAG assistants:
+
+1. **Right-size the context.** Fewer, better sources after re-ranking. Summarized history. This cuts the largest cost directly.
+2. **Use small models for small tasks.** Rewriting, titles, classification, and simple guardrails do not need the large model.
+3. **Get prompt caching working.** Stable prefix, verified hit rate.
+4. **Cap output length.** Set `max_tokens` per task. Ask for concise answers in the prompt.
+5. **Cancel abandoned generations.** Propagate stop and disconnect to the provider.
+6. **Use batch APIs for offline work.** Many providers offer a large discount for non-urgent batch jobs: evals, bulk summaries, contextual chunk headers at ingestion.
+7. **Route by difficulty**, once you have data showing a smaller model handles a large share of questions well.
+
+Measure quality before and after each change with the evaluation set. Cost cuts that lower quality usually cost more in user trust than they save.
+
+## Tracking and attributing cost
+
+- Record tokens and cost per model call, tagged with tenant, user, feature (chat, ingestion, eval), and model.
+- Report cost per tenant and per feature monthly. In SaaS, this is the basis for pricing. Internally, it is the basis for chargeback to departments.
+- Set budget alerts per tenant and for the whole system.
+- Watch **cost per successful answer** (cost divided by answers with positive or no negative feedback), not just total cost. A cheaper configuration that produces more regenerations can cost more overall.
+
+## Checklist
+
+- [ ] A cost model exists with real prices and realistic usage.
+- [ ] Every model call records tokens and cost with tenant, user, and feature tags.
+- [ ] Prompts have a byte-stable prefix, and cache hit rate is monitored.
+- [ ] Response caching, if used, keys on tenant, permissions, sources, and prompt version.
+- [ ] Small tasks use small models.
+- [ ] Every call has an output token cap.
+- [ ] Offline workloads use batch APIs where available.
+- [ ] Cost changes are evaluated for quality impact.
