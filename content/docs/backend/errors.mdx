@@ -1,0 +1,134 @@
+---
+title: Errors
+description: The single error format used by every endpoint and stream, and the reference list of error codes with their HTTP status, meaning, and whether a retry can help.
+---
+
+Every endpoint and every stream reports errors in the same shape, with a stable machine-readable code. Clients branch on the code, never on the message text or the HTTP status alone. This page is the reference.
+
+## Error format
+
+```json
+{
+  "error": {
+    "code": "rate_limited",
+    "message": "Too many messages. Try again in 18 seconds.",
+    "retryable": true,
+    "retry_after_ms": 18000,
+    "trace_id": "7f3a9c2e5b1d",
+    "details": {}
+  }
+}
+```
+
+| Field | Rules |
+| --- | --- |
+| `code` | Stable `snake_case` string. Never changes meaning once published. Clients switch on this |
+| `message` | Human-readable, safe to show to end users. No stack traces, SQL, internal hostnames, or prompt text |
+| `retryable` | `true` only if the same request can succeed later without changes |
+| `retry_after_ms` | Present when the server knows when to retry |
+| `trace_id` | Links to logs and traces. Shown in the UI as a reference |
+| `details` | Optional structured data, such as which field failed validation |
+
+In an SSE stream, the same object is sent as an `error` event, and the stream ends:
+
+```text
+event: error
+data: {"code":"provider_unavailable","message":"The AI service is temporarily unavailable.","retryable":true,"trace_id":"7f3a9c2e5b1d"}
+```
+
+If the stream has already started, the HTTP status is already `200`. That is why the code inside the event, not the status, is the source of truth.
+
+## Error code reference
+
+### Request and auth
+
+| Code | HTTP | Retryable | Meaning |
+| --- | --- | --- | --- |
+| `invalid_request` | 400 | No | Malformed body or invalid parameter. `details` lists the fields |
+| `unauthorized` | 401 | After re-auth | Missing, invalid, or expired credentials |
+| `forbidden` | 403 | No | Authenticated, but not allowed to use this feature or resource |
+| `not_found` | 404 | No | The resource does not exist, or the user cannot see it. Do not distinguish the two, or you leak existence |
+| `conflict` | 409 | Sometimes | Idempotency key in progress, or a state conflict such as confirming an already-rejected tool call |
+| `payload_too_large` | 413 | No | Message or file over the size limit |
+| `unsupported_media_type` | 415 | No | File type not supported for upload |
+
+### Limits
+
+| Code | HTTP | Retryable | Meaning |
+| --- | --- | --- | --- |
+| `rate_limited` | 429 | Yes | Too many requests in a short period. `retry_after_ms` is set |
+| `quota_exceeded` | 429 | Yes, after reset | Daily or monthly token or budget quota used. `details.resets_at` is set |
+| `concurrency_limited` | 429 | Yes | Too many open streams or jobs for this user |
+
+### AI processing
+
+| Code | HTTP | Retryable | Meaning |
+| --- | --- | --- | --- |
+| `input_blocked` | 422 | No | Input guardrail rejected the message. `details.category` gives a safe category name |
+| `output_blocked` | 200 in stream | No | Output guardrail withheld the answer |
+| `context_too_long` | 422 | No | Conversation plus attachments exceed what the model can read, even after trimming |
+| `provider_unavailable` | 503 | Yes | All model providers and fallbacks failed |
+| `timeout` | 504 | Yes | The model or a critical step exceeded its deadline |
+| `agent_step_limit` | 200 in stream | No | The agent reached its maximum number of steps without finishing |
+
+### Tools
+
+| Code | HTTP | Retryable | Meaning |
+| --- | --- | --- | --- |
+| `tool_not_allowed` | 403 | No | The tool is disabled for this tenant or user |
+| `tool_auth_required` | 401 | After connecting | The user must connect their account in the target system |
+| `tool_failed` | 502 | Depends | The target system returned an error. `details.target_message` holds its safe message |
+| `tool_rejected` | 200 in stream | No | The user rejected the action. Not an error for the user, but reported for completeness |
+
+### Documents and jobs
+
+| Code | HTTP | Retryable | Meaning |
+| --- | --- | --- | --- |
+| `upload_failed` | 422 | No | File unreadable: encrypted, corrupt, or empty. `details.reason` says which |
+| `ocr_required` | 422 | No | Scanned file with no text layer, and OCR is not enabled |
+| `job_failed` | 200 on job status | Depends | Background job ended in failure. `details` holds the reason |
+
+### Server
+
+| Code | HTTP | Retryable | Meaning |
+| --- | --- | --- | --- |
+| `internal` | 500 | Yes | Unexpected error. Always logged with full context, never shown in detail to users |
+| `maintenance` | 503 | Yes | Planned maintenance. `retry_after_ms` is set when known |
+
+## Writing error messages
+
+Messages are shown to end users, so write them for end users.
+
+| Do | Don't |
+| --- | --- |
+| "You don't have access to the contract review tool. Ask your workspace admin." | "403 Forbidden: missing permission tools.contract_review.use" |
+| "This PDF is password protected. Remove the password and upload it again." | "PDFSyntaxError: encrypted stream" |
+| "The AI service is busy. Your message is saved, try again in a moment." | "Upstream provider returned 529 overloaded_error" |
+
+The internal detail still matters for debugging. Put it in the logs under the same trace ID, never in the response.
+
+## Never leak through errors
+
+Error paths are a common source of data leaks.
+
+- **No prompt content.** A provider error can echo part of the prompt, including retrieved documents the user should not see in that form. Strip provider error bodies before building a response.
+- **No existence leaks.** Return `not_found` for documents the user cannot access, the same as for documents that do not exist.
+- **No internal topology.** Hostnames, service names, and stack traces stay in logs.
+- **No guardrail internals.** Give a category such as "sensitive personal data", not the rule or classifier score, or attackers can tune their inputs against it.
+
+## Adding a new error code
+
+1. Check whether an existing code fits. Prefer reusing over adding.
+2. Add the code to the shared error definitions used by backend and frontend.
+3. Add a user-facing message and action to the frontend's error mapping. See [Error and empty states](/docs/frontend/error-states).
+4. Add it to this page.
+5. Add an alert if the code indicates a system problem rather than a user problem.
+
+## Checklist
+
+- [ ] All endpoints and streams use the same error object.
+- [ ] Clients switch on `code`, not on message text.
+- [ ] `retryable` is accurate for every code.
+- [ ] Messages are safe for end users, and internal details are only in logs.
+- [ ] Provider error bodies are never passed through.
+- [ ] `not_found` is returned for resources the user cannot see.
