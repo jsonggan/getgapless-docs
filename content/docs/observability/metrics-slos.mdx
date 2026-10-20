@@ -1,0 +1,119 @@
+---
+title: Metrics and SLOs
+description: The metrics that describe the assistant's health, how to define service level objectives users actually feel, and which conditions should page someone.
+---
+
+Metrics show the state of the whole system over time. SLOs (service level objectives) turn the most important metrics into explicit promises, and alerts fire when those promises are at risk.
+
+## Core metrics
+
+### User-facing
+
+| Metric | Type | Dimensions |
+| --- | --- | --- |
+| Chat requests | Counter | Tenant, feature, outcome |
+| Time to first token | Histogram | Tenant, model route, region |
+| Total response time | Histogram | Feature, model route |
+| Outcome rate | Counter by outcome | `answered`, `not_found`, `blocked`, `failed`, `stopped` |
+| Stream drops | Counter | Region, client type |
+| Error rate by code | Counter | Error code from [Errors](/docs/backend/errors) |
+
+### Model layer
+
+| Metric | Type | Dimensions |
+| --- | --- | --- |
+| Model calls | Counter | Provider, model, route, status |
+| Model latency and TTFT | Histogram | Provider, model |
+| Tokens in, out, cached | Counter | Provider, model, tenant, feature |
+| Cost | Counter | Provider, model, tenant, feature |
+| Fallback rate | Counter | Route, reason |
+| Provider 429 and 5xx | Counter | Provider, model, region |
+| Circuit breaker state | Gauge | Provider, model |
+
+### Retrieval and ingestion
+
+| Metric | Type |
+| --- | --- |
+| Retrieval latency, by stage | Histogram |
+| Low relevance rate (top score below threshold) | Counter |
+| Index freshness lag | Histogram per connector |
+| Queue depth and oldest item age | Gauge per stage |
+| Ingestion failures by reason | Counter |
+
+### Safety and tools
+
+| Metric | Type |
+| --- | --- |
+| Guardrail blocks by guardrail and category | Counter |
+| Injection detections | Counter |
+| Tool calls by tool and confirmation result | Counter |
+| Agent step limit hits | Counter |
+| Chunks without ACL encountered | Counter. Must stay at zero |
+
+Be careful with **high-cardinality dimensions**. Tenant ID is fine for most metrics systems with hundreds or a few thousand tenants. User ID, conversation ID, and trace ID belong in traces and logs, not metric labels.
+
+## Service level objectives
+
+An SLO states a target for a measurable indicator over a time window. Choose a few that reflect what users experience.
+
+| SLI (indicator) | SLO (target) | Window |
+| --- | --- | --- |
+| Share of chat requests that return a non-error outcome | 99.5% | 30 days |
+| Share of chat requests with TTFT under 3 s | 95% | 30 days |
+| Share of chat requests with TTFT under 8 s | 99% | 30 days |
+| Share of permission revocations reflected in the index within 15 minutes | 99% | 30 days |
+| Share of uploads ready to query within 2 minutes (files under 20 MB) | 95% | 30 days |
+
+Notes:
+
+- **Count `not_found` and `blocked` as successes** for availability. They are correct behavior. Track them separately as quality signals.
+- **Exclude user cancellations** from latency SLOs.
+- Model provider outages count against your SLO. Users do not care whose fault it is. This is the business case for fallbacks.
+
+### Error budgets
+
+A 99.5% availability SLO over 30 days allows 0.5% failures: the **error budget**. If you spend it quickly, slow down risky changes, such as model migrations, and focus on reliability. If you have plenty left, you can take more risk.
+
+## Alerting
+
+Page a human only for problems that need action now. Alert on SLO burn rate rather than raw thresholds: a burn rate alert fires when you are consuming the error budget fast enough to exhaust it soon.
+
+| Alert | Condition (example) | Severity |
+| --- | --- | --- |
+| Availability fast burn | Error budget burning 14 times faster than allowed, over 1 hour | Page |
+| Availability slow burn | Burning 6 times faster, over 6 hours | Page during working hours |
+| TTFT degradation | p95 TTFT over 5 s for 15 minutes | Page |
+| All providers failing for a route | Fallback chain exhausted above 1% of requests for 5 minutes | Page |
+| Chunk without ACL | Any occurrence | Page security on-call |
+| Permission sync lag | p95 over 15 minutes for 30 minutes | Page during working hours |
+| Cost spike | Hourly cost over 3 times the same hour last week | Notify |
+| Guardrail block spike | Block rate doubles versus baseline for a tenant | Notify |
+| Ingestion queue stuck | Oldest item over 1 hour in a high-priority queue | Notify, page if uploads are affected |
+| Provider rate limits | Sustained 429s above 5% | Notify |
+
+Every alert links to a runbook. See [Runbooks and incidents](/docs/observability/runbooks).
+
+## Dashboards
+
+Build a small number of dashboards with a clear purpose:
+
+| Dashboard | Audience | Shows |
+| --- | --- | --- |
+| Service overview | On-call, everyone | SLOs, request rate, outcome mix, TTFT, errors, provider status |
+| Model layer | AI engineers | Calls, latency, tokens, cost, fallbacks by provider and model |
+| Retrieval and ingestion | AI and data engineers | Retrieval latency and relevance, freshness, queues, failures |
+| Quality | AI team, product | Feedback, regenerations, sampled grades, not found rate. See [Quality monitoring](/docs/observability/quality-monitoring) |
+| Cost | Engineering leads, finance | Cost by tenant, feature, model, trend and forecast |
+| Tenant view | Support, account teams | One tenant's usage, errors, latency, and limits |
+
+Add **deploy and config change markers** to every dashboard. Most metric changes line up with a deploy, a prompt version change, or a model route change.
+
+## Checklist
+
+- [ ] User-facing, model, retrieval, ingestion, safety, and tool metrics are collected with consistent dimensions.
+- [ ] High-cardinality IDs are kept out of metric labels.
+- [ ] SLOs cover availability, TTFT, permission sync, and upload readiness.
+- [ ] `not_found` and `blocked` count as successes for availability.
+- [ ] Alerts use burn rates, and every alert links to a runbook.
+- [ ] A chunk without an ACL pages security immediately.
+- [ ] Dashboards show deploy and config change markers.

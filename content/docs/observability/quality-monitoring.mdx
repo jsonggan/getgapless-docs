@@ -1,0 +1,107 @@
+---
+title: Quality Monitoring
+description: How to detect drops in answer quality in production, what causes quality drift in AI systems, and how to alert on quality without drowning in noise.
+---
+
+Answer quality can degrade without a single error or latency change. A provider silently updates a model. A connector stops syncing and answers go stale. A popular document is replaced by a poorly structured one. Quality monitoring watches for these drifts continuously, using the signals described in [Online evaluation](/docs/evaluation/online).
+
+## Causes of quality drift
+
+| Cause | Typical signature |
+| --- | --- |
+| Model behavior change at the provider | Quality shifts across all topics on one date, with no deploy on your side |
+| Prompt or model change on your side | Shift aligned with a deploy or config change marker |
+| Fallback model serving more traffic | Quality drops while fallback rate rises |
+| Connector stopped syncing | "Outdated" feedback and "not found" rate rise for one source or tenant |
+| Source content changed | Problems concentrated on one topic or document |
+| New user population | New tenant or department onboarded with different questions |
+| Index problem | Retrieval relevance scores drop across the board |
+| Guardrail tuning | Block rate and false positive reports change |
+
+## Quality signals to track
+
+| Signal | Source | Speed |
+| --- | --- | --- |
+| Thumbs down rate | Explicit feedback | Hours to days for significance |
+| Regeneration and rephrase rates | Implicit behavior | Hours |
+| Copy rate | Implicit behavior | Hours |
+| Sampled groundedness and citation precision | LLM judge on 1 to 2% of answers | Hours |
+| "Not found" rate | Outcome | Minutes |
+| Low retrieval relevance rate | Retrieval scores | Minutes |
+| Abstention phrasing rate | Pattern match on answers | Minutes |
+| Answer length distribution | Output tokens | Minutes |
+| Guardrail block rate | Guardrails | Minutes |
+| Canary questions | Scheduled synthetic checks | Minutes |
+
+Fast, cheap signals (not found rate, relevance scores, output length) detect sudden breakage. Slow signals (feedback, judge scores) detect gradual drift.
+
+## Canary questions
+
+Run a fixed set of known questions against production every 15 to 60 minutes, as a synthetic user in a dedicated test tenant, or with test documents in a real tenant where permitted.
+
+- Cover each major source and topic, with known expected answer points.
+- Grade automatically with deterministic checks where possible: expected facts present, expected document cited.
+- Alert when canaries fail repeatedly.
+
+Canaries catch whole-system breakage within minutes, including provider changes and connector failures. They do not represent real user questions, so they complement, not replace, the other signals.
+
+## Segmenting
+
+Overall averages hide problems. Always break signals down by:
+
+- Tenant.
+- Topic or source (from retrieved document sources).
+- Model, model route, and fallback flag.
+- Prompt version.
+- Language.
+
+A drop that affects only one tenant's HR questions is invisible in the global average but obvious when segmented.
+
+## Detecting change
+
+Quality signals are noisy. Avoid alerting on every wiggle.
+
+- Compare **against a baseline**, such as the same hours last week, not against a fixed number.
+- Require **sustained** deviation: for example, thumbs down rate above baseline by a significant margin for several hours, with a minimum number of rated answers.
+- Use simple statistical tests on proportions, or control charts, rather than eyeballing.
+- Treat quality alerts as **notifications for the AI team during working hours**, not pages, unless canaries fail hard.
+
+| Alert | Condition |
+| --- | --- |
+| Canary failures | 3 consecutive failures for a canary group |
+| Not found spike | Not found rate doubles for a tenant or source over 1 hour |
+| Relevance drop | Median top retrieval score drops sharply versus last week |
+| Feedback degradation | Thumbs down rate significantly above baseline for 6 hours with enough samples |
+| Judge score drop | Sampled groundedness drops below threshold for a day |
+| Output shape change | Median answer length changes by more than 30% without a deploy |
+
+## Investigating a quality drop
+
+1. **Check change markers.** Did a deploy, prompt version, model route, or guardrail config change near the start of the drop?
+2. **Check the provider.** Is the response model identifier the same as before? Did the fallback rate change?
+3. **Segment.** Is it one tenant, one source, one language, or everywhere?
+4. **Check data freshness** for affected sources.
+5. **Read traces** for a sample of affected answers, especially those with negative feedback.
+6. **Run the golden set** against production configuration and compare with the last known good run.
+
+If the cause is a change on your side, roll back first and investigate after. See [Rollouts](/docs/deployment/rollouts).
+
+## Weekly quality review
+
+Automated monitoring finds changes. A weekly human review finds problems that never changed because they were always there.
+
+- Review the week's quality dashboard, segmented.
+- Read a sample of negative feedback and low judge scores, with traces.
+- Classify causes and route them: retrieval fixes, content owners, prompt changes, guardrail tuning.
+- Add cases to the regression set.
+- Track the count of open quality issues by cause over time.
+
+## Checklist
+
+- [ ] Fast signals (not found, relevance, output length, blocks) and slow signals (feedback, judge scores) are tracked.
+- [ ] Canary questions run against production every 15 to 60 minutes.
+- [ ] Every signal is segmented by tenant, source, model, prompt version, and language.
+- [ ] Alerts compare against baselines and require sustained deviation.
+- [ ] Quality alerts notify the AI team. Hard canary failures page.
+- [ ] An investigation checklist starts with change markers and provider model identifiers.
+- [ ] A weekly quality review turns findings into fixes and regression cases.

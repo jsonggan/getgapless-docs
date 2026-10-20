@@ -1,0 +1,110 @@
+---
+title: Logging
+description: How to write structured, correlated logs for an AI system, what to log at each step, what never to log, and how to keep log volume and cost under control.
+---
+
+Logs record discrete events with context. In this system, traces carry the detailed step-by-step view of each request, and logs record notable events: errors, decisions, state changes, and warnings. Keep logs structured, correlated with traces, and free of content.
+
+## Structured logs
+
+Every log line is a JSON object with standard fields. Free-text logs cannot be filtered, redacted reliably, or aggregated.
+
+```json
+{
+  "ts": "2026-03-14T09:31:07.412Z",
+  "level": "warn",
+  "service": "orchestrator",
+  "event": "retrieval.low_relevance",
+  "trace_id": "7f3a9c2e5b1d",
+  "span_id": "a1b2c3d4",
+  "tenant_id": "ten_acme",
+  "user_id_hash": "u_5e1f...",
+  "conversation_id": "conv_8f2k",
+  "message_id": "msg_91xa",
+  "top_score": 0.21,
+  "threshold": 0.35,
+  "candidates": 50,
+  "action": "answer_without_sources"
+}
+```
+
+| Field | Rule |
+| --- | --- |
+| `event` | A stable name from a fixed vocabulary, such as `model.fallback`, `guardrail.blocked`, `tool.rejected`. Dashboards and alerts depend on it |
+| `trace_id`, `span_id` | Always present, so any log line links to its trace |
+| `tenant_id` | Always present for tenant-scoped work |
+| User identity | Hashed or ID only. No emails or names in logs |
+| Values | Numbers and enums, not sentences |
+
+## What to log
+
+| Event | Level | Key fields |
+| --- | --- | --- |
+| Request completed | info | Route, status, duration, tokens, model, prompt version |
+| Model fallback used | warn | Primary model, fallback model, reason |
+| Model call failed | warn or error | Provider, model, status, retryable |
+| Stream stalled or dropped | warn | Time since last token, tokens sent |
+| Guardrail blocked | info | Guardrail, category, stage. No content |
+| Retrieval returned nothing relevant | info | Top score, threshold |
+| Tool call rejected by user | info | Tool name |
+| Tool call failed | warn | Tool, target system status |
+| Agent hit step limit | warn | Steps, last tool |
+| Permission filter returned chunk without ACL | **error** | Chunk ID. Should never happen |
+| Context truncated | info | Part truncated, tokens removed |
+| Budget or rate limit reached | info | Limit type, tenant |
+| Job failed permanently | error | Job type, reason |
+
+## What never to log
+
+- **Message content, prompts, or model outputs.** These go in traces with restricted access, if anywhere.
+- **Document text or chunk content.**
+- **Secrets**: API keys, tokens, passwords, connection strings. Including those that appear in request bodies or exception messages.
+- **Personal data**: names, emails, phone numbers. Use IDs.
+- **Full provider error bodies**, which can echo prompt content.
+
+Enforce this in code, not by convention:
+
+- Use a logging wrapper that only accepts structured fields, and rejects or redacts fields named like `prompt`, `content`, `text`, `body`, `message`.
+- Scrub exceptions before logging: strip request bodies and provider responses.
+- Run a redaction processor in the telemetry collector as a second layer, with patterns for emails, card numbers, and key formats.
+- Periodically scan stored logs for leaked patterns, and treat findings as incidents.
+
+## Levels
+
+| Level | Use for |
+| --- | --- |
+| `error` | Something failed that needs attention, or a condition that must never happen |
+| `warn` | Degraded but handled: fallback used, retry needed, limit reached |
+| `info` | Notable normal events: request completed, guardrail decision, job finished |
+| `debug` | Detailed diagnostics, off in production by default, enabled per tenant or per request when debugging |
+
+Do not log at `error` for user mistakes such as invalid input. Error-level logs should be rare enough to read.
+
+## Volume and cost
+
+AI systems generate a lot of telemetry: every request has many steps, and agents have many more. Logging costs can rival model costs if unmanaged.
+
+- Log one summary line per request, not one per step. Per-step detail lives in the trace.
+- Sample `info` logs for high-volume, low-value events, such as successful cache hits.
+- Never log per token.
+- Set retention by level: errors longer, info shorter.
+
+## Correlation in practice
+
+To investigate a user report:
+
+1. The user provides the reference ID shown in the UI, which is the trace ID.
+2. Search logs by `trace_id` to see notable events: fallbacks, guardrails, low relevance.
+3. Open the trace to see every step's timing, the retrieved chunks, and the prompt version.
+4. Open the message record for sources used and feedback.
+
+For a broad issue, filter logs by `event` and dimensions, for example `event = model.fallback AND tenant_id = ten_acme` over the last hour.
+
+## Checklist
+
+- [ ] All logs are structured JSON with stable event names.
+- [ ] Every log line has a trace ID, and tenant ID where relevant.
+- [ ] No content, secrets, or personal data in logs, enforced by a logging wrapper and collector redaction.
+- [ ] One summary log per request. Step detail lives in traces.
+- [ ] Error level is reserved for real failures and impossible conditions.
+- [ ] Log retention and sampling are set per level.
