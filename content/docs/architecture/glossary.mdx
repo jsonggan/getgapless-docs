@@ -1,0 +1,84 @@
+---
+title: Glossary
+description: Definitions of the terms used across these docs, so every page uses each word the same way.
+---
+
+Each term has one meaning across all pages. If a page uses a word differently, that is a bug in the docs.
+
+## Core terms
+
+| Term | Meaning |
+| --- | --- |
+| **Assistant** | The AI product described in these docs. Users chat with it, and it answers, summarizes, and takes actions |
+| **Tenant** | A group whose data must be isolated from other groups, such as a customer company or a business unit |
+| **Principal** | An identity that can be granted access: a user, a group, or a service account |
+| **ACL** | Access control list. The list of principals allowed to read a document |
+| **Orchestrator** | The service that runs the steps of a request: load history, retrieve, build the prompt, call the model, call tools |
+| **Model gateway** | The internal service all model calls go through. Handles providers, retries, fallback, and cost tracking |
+
+## Models and prompts
+
+| Term | Meaning |
+| --- | --- |
+| **LLM** | Large language model. A model that takes text in and produces text out |
+| **Token** | The unit models read and write. Roughly 4 characters or three quarters of a word in English. Prices and limits are counted in tokens |
+| **Context window** | The maximum number of tokens a model can read in one call, including the prompt and the answer |
+| **Prompt** | Everything sent to the model in one call: instructions, retrieved content, history, and the question |
+| **System prompt** | The instructions part of the prompt, written by the developers, not the user |
+| **Prompt template** | A versioned prompt with placeholders that the orchestrator fills in for each request |
+| **Temperature** | A setting that controls randomness. Low values give more consistent output |
+| **Time to first token (TTFT)** | Delay between sending a request and receiving the first output token. The main speed metric users feel |
+| **Hallucination** | A confident statement from the model that is not supported by its sources or by fact |
+| **Fine-tuning** | Further training a model on your own examples to change its behavior on a task |
+
+## Retrieval
+
+| Term | Meaning |
+| --- | --- |
+| **RAG** | Retrieval-augmented generation. Search for relevant content first, then give it to the model to answer from |
+| **Ingestion** | The background process that turns source documents into searchable chunks |
+| **Connector** | Code that pulls documents and their permissions from a source system, such as a wiki or a file drive |
+| **Chunk** | A piece of a document, usually a few hundred tokens, that is indexed and retrieved as one unit |
+| **Embedding** | A list of numbers that represents the meaning of a text. Similar meanings give nearby embeddings |
+| **Vector index** | A data structure that finds the embeddings nearest to a query embedding |
+| **Keyword search** | Search by matching words, usually ranked with BM25. Good for names, codes, and exact terms |
+| **Hybrid search** | Combining keyword and vector search results |
+| **Re-ranking** | A second, more accurate scoring of the top search results, usually with a cross-encoder model |
+| **Top-k** | The number of results kept from a search step |
+| **Grounding** | How well an answer is supported by the retrieved sources |
+| **Citation** | A reference in the answer pointing to the source chunk that supports a statement |
+
+## Agents and tools
+
+| Term | Meaning |
+| --- | --- |
+| **Tool** | A function the model can ask the system to run, such as `search_tickets` or `create_ticket` |
+| **Tool call** | The model's structured request to run a tool, with arguments |
+| **Agent** | A loop where the model decides which tools to call, sees the results, and continues until the task is done |
+| **Human in the loop** | A step where a person must approve before the system continues, usually before a side effect |
+| **Side effect** | Any action that changes something outside the assistant: writing, sending, deleting, paying |
+
+## Quality and safety
+
+| Term | Meaning |
+| --- | --- |
+| **Eval** | A repeatable test that scores the system's outputs on a fixed dataset |
+| **Golden dataset** | A curated set of inputs with known good answers or grading criteria, used for evals |
+| **LLM-as-judge** | Using a model to grade another model's output against criteria |
+| **Regression** | A change that makes a previously passing case fail |
+| **Guardrail** | A check on input or output that blocks or modifies content that breaks a rule |
+| **Prompt injection** | Text that tries to override the system's instructions, typed by a user or hidden in a document |
+| **Jailbreak** | A prompt crafted to make the model ignore its safety rules |
+| **PII** | Personally identifiable information, such as names, emails, phone numbers, and ID numbers |
+| **Red teaming** | Deliberately attacking the system to find safety and security failures before users do |
+
+## Operations
+
+| Term | Meaning |
+| --- | --- |
+| **Trace** | The record of one request across every service and step, with timings |
+| **Span** | One step inside a trace, such as a retrieval call or a model call |
+| **SLO** | Service level objective. A target such as "99.5% of messages get a first token within 3 seconds" |
+| **p50, p95, p99** | Percentiles. p95 latency is the value that 95% of requests are faster than |
+| **Canary** | Releasing a change to a small share of traffic first, to catch problems before full rollout |
+| **Runbook** | Step-by-step instructions for handling a known operational problem |
