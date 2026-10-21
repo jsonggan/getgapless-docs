@@ -7,7 +7,7 @@ export function baseOptions(): BaseLayoutProps {
       title: (
         <>
           {/* biome-ignore lint/performance/noImgElement: static SVG logo */}
-          <img src="/icon.svg" alt="" width={24} height={24} />
+          <img src="/icon.svg" alt="" width={36} height={36} />
           {appName}
         </>
       ),
