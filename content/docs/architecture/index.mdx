@@ -1,51 +1,69 @@
 ---
 title: Overview and Architecture
-description: The reference enterprise AI system used across these docs, its components, and why each one exists.
+description: How AI systems are used in different real-world scenarios, and the components of a typical AI system design.
 ---
 
-This page describes the system every other section refers to. Read it first. It names the components, shows how they connect, and explains what problem each one solves. Later pages go deep on one component at a time.
+This page shows where AI systems are useful, then walks through one design: its components, how they connect, and what problem each one solves. Later pages go deep on one component at a time.
 
-## The reference system
+## Where AI systems are useful
 
-The docs use one running example so that every page talks about the same thing: an **internal AI assistant** for a company with a few thousand employees.
+AI systems solve very different problems. These companies use AI in production today:
 
-It does three jobs:
+| Company | Scenario | What the AI system does |
+| --- | --- | --- |
+| [Shopee](https://fintechnews.sg/133456/ai/shopee-chatgpt/) | E-commerce | Shoppers describe what they want in plain language, such as a gift idea, and get product suggestions from Shopee's real-time inventory inside ChatGPT. |
+| [Grab](https://openai.com/index/grab/) | Maps and transport | A vision model reads street-level images from driver cameras to detect speed limit signs, turn restrictions, and road geometry, so maps are built faster and cheaper. |
+| [GovTech Singapore](https://www.tech.gov.sg/products-and-services/for-government-agencies/productivity-and-marketing/pair) | Public sector | Pair is an AI assistant that helps public officers write, research, and summarise. It runs on government devices and keeps data within government infrastructure. |
+| [Morgan Stanley](https://openai.com/index/morgan-stanley/) | Wealth management | Financial advisors ask questions over about 100,000 internal research reports and get answers with links to the source documents. |
+| [Duolingo](https://blog.duolingo.com/duolingo-max) | Education | An AI tutor explains why a learner's answer was right or wrong, and runs roleplay conversations with feedback afterwards. |
+| [Stripe](https://stripe.com/radar) | Payments | Models score every payment for fraud risk in real time, trained on transactions from businesses across the Stripe network. No chat interface is involved. |
 
-1. **Answers questions over company knowledge.** "What is our parental leave policy in Germany?" The answer comes from HR documents, wiki pages, and tickets, with citations.
-2. **Works with documents the user brings.** The user uploads a contract and asks for a summary or a risk list.
-3. **Takes small actions.** "Open an IT ticket for my broken laptop." The assistant calls a tool, but asks the user to confirm before anything is written.
-
-Most enterprise AI products are a variation of these three jobs. A support copilot, a sales research tool, and a legal review assistant all retrieve private data, reason over it, and sometimes act. If you understand this system, you can adapt it.
-
-### What the system does not do
-
-Stating limits early prevents bad design decisions later.
-
-- It does **not** train or fine-tune its own foundation model. It calls hosted or self-hosted models through an API.
-- It does **not** make final decisions on people, such as hiring, firing, or credit. Those uses carry legal risk and need a different review process. See [Responsible AI](/docs/responsible-ai).
-- It does **not** act without confirmation on anything that writes, sends, or deletes.
-- It is **not** a system of record. Source documents live in their original systems. The assistant keeps copies for search only.
+Some of these are conversational. Others, such as Grab's maps and Stripe's fraud checks, run in the background and the user never talks to them. Each scenario needs a different design. The sections of these docs help you choose the right components for yours.
 
 ## The design
 
+This design is for a chatbot use case.
+
 ```mermaid
 flowchart LR
-  User[User] --> FE[Frontend<br/>web app]
-  FE -->|HTTPS + SSE| GW[API gateway<br/>auth, rate limits]
-  GW --> ORCH[Orchestrator<br/>chat service]
-  ORCH --> GUARD[Guardrails<br/>input and output checks]
-  ORCH --> RET[Retrieval service]
-  ORCH --> LLM[Model gateway]
-  ORCH --> TOOLS[Tool service]
-  RET --> VDB[(Vector + keyword<br/>index)]
-  LLM --> PROV[Model providers]
-  TOOLS --> EXT[Ticketing, calendar,<br/>other APIs]
-  ORCH --> DB[(App database<br/>chats, feedback)]
-  CONN[Connectors] --> ING[Ingestion pipeline]
-  SRC[Source systems<br/>wiki, drive, HR] --> CONN
+  User[User]
+  SRC[Source systems<br/>wiki, drive, HR]
+  PROV[Model providers]
+  EXT[Ticketing, calendar,<br/>other APIs]
+
+  subgraph CLOUD[Cloud services]
+    FE[Frontend<br/>web app]
+    GW[API gateway<br/>auth, rate limits]
+    ORCH[Orchestrator<br/>chat service]
+    GUARD[Guardrails<br/>input and output checks]
+    RET[Retrieval service]
+    LLM[Model gateway]
+    TOOLS[Tool service]
+    VDB[(Vector + keyword<br/>index)]
+    DB[(App database<br/>chats, feedback)]
+    CONN[Connectors]
+    ING[Ingestion pipeline]
+    OBS[Tracing, logs,<br/>metrics]
+  end
+
+  User --> FE
+  FE -->|HTTPS + SSE| GW
+  GW --> ORCH
+  ORCH --> GUARD
+  ORCH --> RET
+  ORCH --> LLM
+  ORCH --> TOOLS
+  RET --> VDB
+  LLM --> PROV
+  TOOLS --> EXT
+  ORCH --> DB
+  SRC --> CONN
+  CONN --> ING
   ING --> VDB
-  ORCH -.-> OBS[Tracing, logs,<br/>metrics]
+  ORCH -.-> OBS
 ```
+
+Everything inside the frame is hosted on a cloud provider, such as AWS, Azure, or Google Cloud. The user, the source systems, the model providers, and the external APIs sit outside it.
 
 Two flows run through this diagram:
 
@@ -93,7 +111,6 @@ These principles shape decisions in every section. When two options look equal, 
 
 - **Permissions are enforced before the model sees data.** The model cannot be trusted to hide what it has read. If a chunk reaches the prompt, assume the user can see it.
 - **Every answer is traceable.** For any answer you must be able to show the prompt, the retrieved chunks, the model, and the prompt version that produced it.
-- **Models are replaceable.** Business logic never depends on one provider's quirks. The model gateway hides providers behind one interface.
 - **Prompts are code.** They are versioned, reviewed, tested, and rolled out like code.
 - **Measure quality before and after every change.** A prompt edit that looks better on three examples can be worse on three hundred. See [Evaluation](/docs/evaluation).
 - **Humans approve side effects.** Reading is automatic. Writing, sending, and deleting need a click from the user.
