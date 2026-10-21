@@ -1,10 +1,20 @@
 import { RootProvider } from 'fumadocs-ui/provider/next';
 import './global.css';
 import { Inter } from 'next/font/google';
+import type { Metadata } from 'next';
+import { appName } from '@/lib/shared';
 
 const inter = Inter({
   subsets: ['latin'],
 });
+
+export const metadata: Metadata = {
+  title: {
+    template: `%s | ${appName}`,
+    default: appName,
+  },
+  icons: { icon: '/icon.svg' },
+};
 
 export default function Layout({ children }: LayoutProps<'/'>) {
   return (
