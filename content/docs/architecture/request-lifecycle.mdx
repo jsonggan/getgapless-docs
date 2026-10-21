@@ -1,9 +1,9 @@
 ---
 title: Request Lifecycle
-description: One chat message followed end to end, with what each step does, how long it should take, and how it fails.
+description: One chat message followed end to end, with what each step does and how to find out where the time goes.
 ---
 
-This page follows a single message through the system, from the moment the user presses Enter to the moment the answer is saved. Use it to understand where time goes, where things fail, and where to look when an answer is slow or wrong.
+This page follows a single message through the system, from the moment the user presses Enter to the moment the answer is saved. Use it to understand what each step does and how to measure it when an answer is slow.
 
 The example message: *"What is the travel budget for a client visit to Singapore?"*
 
@@ -14,7 +14,7 @@ sequenceDiagram
   autonumber
   participant U as User
   participant FE as Frontend
-  participant GW as Gateway
+  participant GW as API gateway
   participant O as Orchestrator
   participant G as Guardrails
   participant R as Retrieval
@@ -43,44 +43,44 @@ sequenceDiagram
 
 ## Step by step
 
-### 1. Frontend sends the message
+### 1. Message submission
 
-The frontend posts the message and keeps the connection open to receive a stream. It shows the user's message immediately, before the server replies. This is called an optimistic update, and it makes the app feel instant.
+The frontend posts the message and keeps the connection open to receive a stream. It shows the user's message immediately, before the server replies. This optimistic update makes the app feel instant.
 
 The request carries a **client message ID**, a UUID created in the browser. If the network drops and the frontend retries, the server uses this ID to avoid creating the message twice.
 
-### 2. Gateway authenticates and limits
+### 2. Authentication and rate limits
 
-The gateway validates the session token, resolves the user ID and tenant ID, and checks two limits:
+The API gateway validates the session token, resolves the user ID and tenant ID, and checks two limits:
 
 - **Request rate**, for example 30 messages per minute per user. This stops scripts and runaway loops.
 - **Token budget**, for example a daily token allowance per user or team. This stops cost blowouts.
 
-If either check fails, the gateway returns `429` before any expensive work starts. Rejecting early is the whole point of the gateway.
+If either check fails, it returns `429`. Rejecting here keeps expensive work from starting.
 
-### 3. Orchestrator loads context
+### 3. Context loading
 
-The orchestrator loads recent messages from the conversation. It does not load all of them. Long conversations are trimmed to fit the context budget, usually the last 10 to 20 turns or a summary of older turns. See [Context management](/docs/ai-model/context).
+The orchestrator loads recent messages from the conversation. Long conversations are trimmed to fit the context budget, usually the last 10 to 20 turns or a summary of older turns. See [Context management](/docs/ai-model/context).
 
 ### 4. Input guardrails
 
 A fast check runs on the user's message. It looks for:
 
 - Prompt injection attempts, such as "ignore previous instructions".
-- Content the company has banned.
+- Content the company has banned, such as requests for competitor pricing or legal advice.
 - Sensitive data the user should not paste, such as credit card numbers.
 
 This check must be fast, ideally under 100 ms, because it sits on the critical path. Use a small classifier or rules here. Save expensive checks for the output side or for async review.
 
 ### 5. Query rewriting
 
-"What about Tokyo?" means nothing to a search engine without the earlier turns. A small, fast model rewrites the latest message into a standalone query: "What is the travel budget for a client visit to Tokyo?"
+After the Singapore question, the user asks "What about Tokyo?" That means nothing to a search engine without the earlier turns. A small, fast model rewrites the latest message into a standalone query: "What is the travel budget for a client visit to Tokyo?"
 
 Skip this step for the first message in a conversation, because there is no history to resolve.
 
 ### 6. Retrieval
 
-The retrieval service searches the index with the rewritten query. It applies the user's permissions **as a filter inside the search**, not after it. Then it re-ranks the candidates and returns the best 5 to 10 chunks, each with its source document ID, title, and URL.
+The retrieval service searches the index with the rewritten query. It applies the user's permissions **as a filter inside the search**, not after it. Filtering afterwards can return fewer chunks than requested, and lets chunks the user cannot see affect ranking. Then it re-ranks the candidates and returns the best 5 to 10 chunks, each with its source document ID, title, and URL. For the Tokyo question, the top chunk might be *Travel Policy §4.2, Asia-Pacific per diems*.
 
 Details are in [RAG retrieval](/docs/ai-model/rag-retrieval).
 
@@ -95,57 +95,62 @@ The orchestrator builds the prompt in a fixed order:
 
 It sends the prompt to the model gateway and asks for a streamed response. The model is told to cite sources by number, for example `[2]`.
 
-### 8. Streaming to the user
+### 8. Streaming
 
-As tokens arrive, the orchestrator forwards them to the frontend as server-sent events. When it sees a citation marker, it sends a separate event with the source's title and link, so the frontend can render a citation chip.
+As tokens arrive, the orchestrator forwards them to the frontend as server-sent events (SSE). When it sees a citation marker, such as `[1]` pointing to the Travel Policy chunk, it sends a separate event with the source's title and link, so the frontend can render a citation chip.
 
 ### 9. Output guardrails
 
-Two kinds of output checks exist:
+Output checks come in two kinds:
 
-- **Streaming checks** run on chunks as they pass. They are cheap pattern checks, such as detecting a leaked API key format.
+- **Streaming checks** run on chunks as they pass. They are cheap pattern checks, such as detecting a leaked API key format. They run inline during step 8, so the diagram shows only the full-answer check.
 - **Full-answer checks** run after generation finishes. They can be slower, such as checking whether every claim is supported by a cited source.
 
-If a full-answer check fails after the user already saw the text, the frontend replaces the message with a notice. This is rare but must be handled. The alternative, buffering the whole answer before showing it, destroys perceived speed.
+If a full-answer check fails after the user already saw the text, the frontend replaces the message with a notice. The alternative, buffering the whole answer before showing it, destroys perceived speed.
 
-### 10. Persist and trace
+### 10. Persistence and tracing
 
 The orchestrator saves the assistant message with the IDs of the chunks it used, the model name, the prompt version, token counts, and a trace ID. Then it sends a final `done` event.
 
 Saving the chunk IDs is what makes the answer auditable later. Without them, you cannot answer "why did the assistant say this?"
 
-## Latency budget
+## Where the time goes
 
-Users judge speed by **time to first token**, the delay before text starts appearing. Total time matters less, because people read while the answer streams.
+There is no single right number for how long a request should take. A short question over a few documents can finish in seconds. An agent that plans, calls tools, and reads dozens of files can run for many minutes, sometimes an hour. Both can be healthy.
 
-| Step | Target (p50) | Target (p95) | Notes |
-| --- | --- | --- | --- |
-| Gateway auth and limits | 5 ms | 20 ms | Cache token validation |
-| Load history | 10 ms | 50 ms | Index by conversation ID |
-| Input guardrails | 30 ms | 100 ms | Small model or rules |
-| Query rewrite | 300 ms | 800 ms | Small, fast model |
-| Retrieval and re-rank | 150 ms | 400 ms | Re-ranker is often the slowest part |
-| Model time to first token | 500 ms | 1500 ms | Depends on provider and prompt size |
-| **Time to first token, total** | **about 1 s** | **about 3 s** | What users feel |
-| Full answer streamed | 5 s | 15 s | Depends on answer length |
+What matters depends on the kind of work:
 
-If you are over budget, the usual culprits are, in order: a large prompt, a slow re-ranker, a cold or overloaded model endpoint, and query rewriting with a model that is bigger than needed.
+- **Chat-style answers.** Users judge speed by **time to first token**, the delay before text starts appearing. Total time matters less, because people read while the answer streams.
+- **Long-running tasks.** Users judge speed by whether they can see progress. A task that takes 20 minutes and shows each step feels fine. A task that takes 2 minutes behind a spinner feels broken.
 
-## Where it fails and what to do
+So agree with the client on what "fast enough" means for their workload, then measure against that. Do not copy someone else's numbers.
 
-| Failure | What the user should see | What the system should do |
-| --- | --- | --- |
-| Token expired | Redirect to sign-in, then resend | Return `401`, frontend refreshes token and retries once |
-| Rate limited | "You are sending messages too fast. Try again in 20 seconds." | Return `429` with a `Retry-After` header |
-| Retrieval returns nothing relevant | An answer that says it found no matching documents | Do not let the model guess. Instruct it to say so |
-| Model provider times out | A short delay, then the answer | Model gateway retries once, then falls back to a second provider |
-| Stream drops midway | A "Reconnecting" notice, then the rest of the answer or a retry button | Frontend resumes using the last event ID |
-| Output guardrail blocks after streaming | The message is replaced with a notice | Log the event with the trace ID for review |
+### Measure each step
 
-## Checklist
+When a request is slow, guessing the cause wastes time. Measure first. Record a start time and an end time for every step, tagged with the same trace ID, so you can line them up afterwards.
 
-- [ ] Every request carries user ID, tenant ID, and a trace ID from the gateway onwards.
-- [ ] Permissions are applied inside the retrieval query.
-- [ ] The prompt template has a version, and the version is saved with each answer.
-- [ ] Time to first token is measured and alerted on.
-- [ ] The frontend can resume or retry a dropped stream without duplicating the message.
+```json
+{ "trace_id": "7f3a9c2e5b1d", "step": "load_history",      "duration_ms": 12 }
+{ "trace_id": "7f3a9c2e5b1d", "step": "input_guard",       "duration_ms": 41 }
+{ "trace_id": "7f3a9c2e5b1d", "step": "query_rewrite",     "duration_ms": 620 }
+{ "trace_id": "7f3a9c2e5b1d", "step": "retrieval",         "duration_ms": 2380 }
+{ "trace_id": "7f3a9c2e5b1d", "step": "model_first_token", "duration_ms": 710 }
+```
+
+Log at least these points:
+
+- Each step in the diagram above, including calls to other services.
+- For the model, both time to first token and total generation time, plus input and output token counts.
+- For agents, each tool call and each model turn as its own entry, so a long task breaks down into parts you can read.
+
+A tracing tool shows these as a timeline, which is easier to read than raw logs. See [Tracing](/docs/observability/tracing) and [Logging](/docs/observability/logging).
+
+### Find the culprit
+
+With timings in place, debugging becomes a loop:
+
+1. **Look at many requests, not one.** Compare typical and slow requests. A step that is slow only sometimes points to a different cause than a step that is always slow.
+2. **Find the largest step.** Fix the step that takes the most time first. Shaving 10 ms off a 12 ms step does nothing when another step takes 2 seconds.
+3. **Break that step down further.** If retrieval is slow, add timings inside it: the search, the permission filter, the re-rank. Keep splitting until one piece clearly stands out.
+4. **Form a guess and test it.** Change one thing, run the same requests again, and compare the timings. If the number does not move, the guess was wrong.
+5. **Keep the timing code.** The next slowdown will be easier to find if the measurements are already there.
