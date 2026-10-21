@@ -1,0 +1,83 @@
+---
+title: Developer Guide
+description: How to set up the assistant locally, run it with fixtures or real models, and find your way around the codebase on your first day.
+---
+
+This guide gets a new engineer from a fresh laptop to a running assistant, and explains how to work on it day to day. It assumes the reference architecture described in [Overview and Architecture](/docs/architecture). Adapt names and commands to your repository.
+
+## Prerequisites
+
+| Tool | Why |
+| --- | --- |
+| Git | Source control |
+| Node.js or Python runtime, pinned version | Backend and tooling. Use a version manager such as `mise`, `asdf`, or `nvm` |
+| Package manager (pnpm, uv, or similar), pinned version | Reproducible installs |
+| Docker or a compatible runtime | Local Postgres, Redis, and the search index |
+| Access to the dev secret store | Dev model API keys |
+
+## Local setup
+
+```bash
+git clone git@github.com:yourco/assistant.git
+cd assistant
+make setup        # installs dependencies, git hooks, copies .env.example to .env
+make up           # starts Postgres, Redis, and the search index in Docker
+make db.migrate   # applies database migrations
+make seed         # loads fixture tenant, users, groups, and documents, and indexes them
+make dev          # starts API, workers, and frontend with hot reload
+```
+
+Open the app on localhost and sign in as one of the seeded users. Sign-in uses a local identity stub in development, with a user picker.
+
+### Seeded fixtures
+
+| User | Groups | Use it to test |
+| --- | --- | --- |
+| `alice@example.test` | all-staff, hr | HR content visible |
+| `bob@example.test` | all-staff, eng | Engineering content, no HR |
+| `carol@example.test` | all-staff | Public content only |
+| `admin@example.test` | all-staff, admins | Admin settings, connectors, usage |
+
+The fixture corpus includes policies, wiki pages, a few PDFs with tables, and restricted documents with canary strings. It is small enough to index in under a minute.
+
+## Model modes
+
+| Mode | Set with | Behavior | Use for |
+| --- | --- | --- | --- |
+| Mock | `MODEL_MODE=mock` | Canned responses, tool calls, and streams with configurable delays. No network | Frontend work, offline work, unit tests |
+| Recorded | `MODEL_MODE=replay` | Replays recorded real responses keyed by request hash | Integration tests with realistic output, deterministic |
+| Live | `MODEL_MODE=live` | Real model calls with the dev API key | Prompt work, retrieval tuning, evaluation |
+
+Start in mock mode. Switch to live only when you are working on behavior that depends on the model. Live mode costs money and is subject to dev quotas.
+
+## Common tasks
+
+| Task | Command |
+| --- | --- |
+| Run unit tests | `make test` |
+| Run integration tests | `make test.integration` |
+| Run the smoke eval set (live models) | `make eval.smoke` |
+| Run a specific eval set | `make eval SET=golden` |
+| Re-index fixtures after changing ingestion | `make reindex` |
+| Inspect how a document was parsed and chunked | `make inspect.doc ID=doc_policy_travel` |
+| Run a query as a user and see each retrieval stage | `make inspect.query USER=bob Q="travel budget singapore"` |
+| Render a prompt with fixture data | `make prompt.render NAME=answer VERSION=v15` |
+| Lint and format | `make lint`, `make format` |
+
+The two `inspect` commands are the fastest way to understand retrieval behavior. Use them before changing prompts.
+
+## Debugging a wrong answer locally
+
+1. Reproduce with the same user and question in live mode.
+2. Copy the trace ID from the UI and open the trace in the local tracing UI.
+3. Check retrieval: did the right chunk appear in candidates, and did it survive re-ranking? Use `make inspect.query`.
+4. If retrieval was fine, render the exact prompt with `make prompt.render` and read it.
+5. Make a change, then run the relevant eval set to check it helps without breaking other cases.
+
+## Pages in this section
+
+| Page | Covers |
+| --- | --- |
+| [Repository and standards](/docs/developer-guide/repository) | Repository layout, coding conventions, and rules specific to AI code |
+| [Testing](/docs/developer-guide/testing) | Testing code that calls models: mocks, recordings, contract tests, and where evals fit |
+| [Contributing](/docs/developer-guide/contributing) | Branches, pull requests, review checklists, and how to change prompts, models, and tools |

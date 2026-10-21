@@ -3,11 +3,16 @@ import { lucideIconsPlugin } from 'fumadocs-core/source/lucide-icons';
 import { docsContentRoute, docsImageRoute, docsRoute } from './shared';
 import { defineDocs } from 'fumadocs-mdx/macro';
 import { metaSchema, pageSchema } from 'fumadocs-core/source/schema';
+import { remarkMdxMermaid } from 'fumadocs-core/mdx-plugins';
+import { applyMdxPreset } from 'fumadocs-mdx/config';
 
 const docs = defineDocs({
   dir: 'content/docs',
   docs: {
     schema: pageSchema,
+    mdxOptions: applyMdxPreset({
+      remarkPlugins: [remarkMdxMermaid],
+    }),
     postprocess: {
       includeProcessedMarkdown: true,
     },

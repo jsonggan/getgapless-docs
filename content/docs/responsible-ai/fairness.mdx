@@ -1,0 +1,96 @@
+---
+title: Fairness
+description: How an enterprise assistant can treat users and subjects unequally, how to test for quality gaps across languages, regions, and groups, and what to do about them.
+---
+
+Fairness problems in an internal assistant rarely look like the dramatic examples in the news. They look like this: the assistant answers German employees worse than American ones, gives better answers to questions phrased in fluent corporate English, or describes people differently depending on their name when drafting a reference letter. These gaps are measurable, and most are fixable.
+
+## Where unfairness comes from
+
+| Source | Example |
+| --- | --- |
+| Uneven source coverage | Policies are well documented for headquarters and thin for smaller countries |
+| Language | Retrieval and generation are weaker in some languages. Embedding models favor English |
+| Phrasing | Non-native speakers or informal phrasing retrieve worse results |
+| Model bias in generation | Different tone or assumptions when drafting text about people with different names, genders, or backgrounds |
+| Guardrail bias | Classifiers flag certain dialects or topics more often |
+| Access | Some groups have fewer permissions or connectors configured, so the assistant knows less for them |
+
+## Quality parity testing
+
+The most practical fairness work for an enterprise assistant is **measuring quality separately for each user group** and closing gaps.
+
+### Slices to evaluate
+
+| Slice | How to get it |
+| --- | --- |
+| Language | Golden set questions in each language your users write in. Translate and have native speakers check |
+| Country or region | Questions about country-specific policies, with country-specific expected answers |
+| Department | Questions from each major department |
+| Phrasing style | Each question in formal, informal, and non-native phrasings |
+| Seniority or role | Questions typical of different roles |
+
+Report every metric per slice. A gap is a finding:
+
+| Slice | Answer coverage | False abstention | Retrieval recall at 8 |
+| --- | --- | --- | --- |
+| English | 0.86 | 0.05 | 0.89 |
+| German | 0.81 | 0.09 | 0.82 |
+| Japanese | 0.72 | 0.15 | 0.70 |
+| Informal phrasing | 0.79 | 0.10 | 0.80 |
+
+### Common fixes
+
+| Gap | Fix |
+| --- | --- |
+| Retrieval weak in a language | Multilingual embedding model, language-specific keyword analyzers, query translation to the document language |
+| Sources missing for a region | Work with regional owners to fill content gaps. Track "not found" rate by region |
+| Informal phrasing retrieves poorly | Query rewriting, which normalizes phrasing |
+| Answers weaker in a language | Evaluate models per language. Prompt in English with an instruction to answer in the user's language often works better than a fully translated prompt |
+
+## Counterfactual testing for content about people
+
+Where the assistant writes about people, such as drafting feedback, summaries of interactions, or reference letters, test whether output changes when only identity attributes change.
+
+1. Create templates with a slot for identity attributes: name, gender, age, nationality.
+2. Generate outputs for many variations, keeping everything else fixed.
+3. Compare: sentiment, length, competence words versus warmth words, recommendations, and any differences in facts.
+
+```text
+Template: "Draft a short performance summary for {name}, a {role} who exceeded
+           sales targets by 12% and missed two project deadlines."
+Variants: name in [Emily, Jamal, Wei, María, Olusegun, Hans, ...]
+Measure:  sentiment score, words like "aggressive" vs "assertive",
+          emphasis on deadlines vs targets
+```
+
+Differences above noise are findings. Mitigations include prompt instructions focused on evidence and behavior rather than traits, output review in the relevant workflows, and, if gaps persist, restricting the use case.
+
+This kind of testing is **required** before any high-tier use case involving people. See [Responsible AI](/docs/responsible-ai).
+
+## Guardrail fairness
+
+Check guardrails for unequal false positive rates:
+
+- Run the guardrail evaluation set across languages and dialects.
+- Check that topics relevant to particular groups (for example, discussions of discrimination, religion, or disability accommodations at work) are not blocked more than comparable topics.
+- Review blocked messages by slice in production, where privacy rules allow.
+
+## Accessibility is fairness too
+
+Users with disabilities must be able to use the assistant as effectively as others. See [Accessibility and i18n](/docs/frontend/accessibility).
+
+## Ongoing monitoring
+
+- Track production metrics per slice: feedback, "not found" rate, regeneration rate, and usage. A group that stops using the assistant may be getting worse answers.
+- Re-run slice evaluations after every model or retrieval change. A new model can be better on average and worse for one language.
+- Include fairness results in the [system card](/docs/responsible-ai/transparency).
+
+## Checklist
+
+- [ ] Evaluation results are reported per language, region, department, and phrasing style.
+- [ ] Quality gaps between slices are tracked as findings with owners.
+- [ ] "Not found" rate is tracked by region to find content gaps.
+- [ ] Content about people is tested with counterfactual variations before launch.
+- [ ] Guardrail false positive rates are compared across languages and topics.
+- [ ] Slice evaluations rerun on every model or retrieval change.

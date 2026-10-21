@@ -1,0 +1,4 @@
+{
+  "title": "Security",
+  "pages": ["access-control", "prompt-injection", "data-protection", "infrastructure"]
+}

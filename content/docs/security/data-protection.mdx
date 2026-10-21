@@ -1,0 +1,128 @@
+---
+title: Data Protection
+description: How to protect sensitive data in an AI assistant with encryption, key management, PII detection and redaction, secrets handling, and logging hygiene.
+---
+
+Users paste anything into a chat box: customer lists, contract drafts, health details, passwords, API keys. Indexed documents contain salaries, personal records, and trade secrets. This page covers how that data is protected in transit, at rest, in processing, and in the many secondary places AI systems copy it to.
+
+## Encryption
+
+| Where | Requirement |
+| --- | --- |
+| Browser to gateway | TLS 1.2 or higher, HSTS, modern ciphers |
+| Service to service | TLS or mutual TLS inside the network. Do not rely on "the network is private" |
+| To model providers | TLS. Prefer private connectivity (private endpoints, VPC peering) where providers offer it |
+| Database, object storage, index, backups | Encrypted at rest with keys in a key management service (KMS) |
+| Secrets and OAuth tokens | Encrypted at the application level, in addition to storage encryption |
+
+### Customer-managed keys
+
+Large enterprise customers often require **customer-managed encryption keys (CMEK)**: their data is encrypted with a key they control in their own KMS, and they can revoke it.
+
+Supporting CMEK means:
+
+- Per-tenant keys for the database (often per-tenant encryption of sensitive columns), object storage prefixes, the search index, and backups.
+- Handling key revocation: the tenant's data becomes unreadable, and the system must fail clearly for that tenant rather than crash globally.
+- Being honest about what CMEK cannot cover, such as data in transit to a model provider during processing.
+
+It is significant work. Design storage so that per-tenant keys are possible later, even if you do not offer CMEK at launch.
+
+## Sensitive data in prompts
+
+Every prompt is sent to a model provider. Decide what that means for your data:
+
+| Control | Detail |
+| --- | --- |
+| Provider terms | Enterprise agreement with no training on your data, and a defined retention period, ideally zero |
+| Region | Processing in the regions your customers require |
+| Provider selection per tenant | Some tenants restrict which providers may process their data |
+| Minimization | Only send what the task needs. Fewer, better sources reduce exposure as well as cost |
+
+## PII detection and redaction
+
+PII is personal data: names, emails, phone numbers, national ID numbers, bank details, health information. Where you apply detection depends on the risk.
+
+| Point | Action | Purpose |
+| --- | --- | --- |
+| User input | Detect high-risk types (card numbers, national IDs, passwords) and warn or block | Stop users from sending data that should never leave its system |
+| Logs and traces | Redact before writing | Keep personal data out of systems with broad engineer access |
+| Analytics and eval datasets | De-identify before copying | Use data without carrying personal data along |
+| Model input for specific tenants | Mask entities, then unmask in the output | For tenants whose policy forbids sending certain data to providers |
+| Indexed documents | Usually do **not** redact | Users need the real content. Permissions are the control here |
+
+### Detection methods
+
+- **Patterns and checksums** for structured identifiers: card numbers with Luhn validation, IBANs, national ID formats, email addresses, API key formats. Fast and precise.
+- **Named entity recognition models** for names, addresses, and organizations. Slower, with false positives.
+- **Small classifiers or LLM checks** for context-dependent categories such as health information.
+
+Combine them, tune per data type, and measure precision and recall on your own data. Over-redaction of logs is usually acceptable. Over-blocking user input frustrates users, so warn rather than block except for clearly dangerous types.
+
+### Masking and unmasking
+
+For tenants that require it, replace entities with placeholders before the model call and restore them after:
+
+```text
+Input:   "Draft a reply to Maria Keller about invoice 4471 for EUR 12,400."
+Masked:  "Draft a reply to [PERSON_1] about invoice [ID_1] for [AMOUNT_1]."
+Output:  "Dear [PERSON_1], thank you for your message about invoice [ID_1]..."
+Final:   "Dear Maria Keller, thank you for your message about invoice 4471..."
+```
+
+This reduces quality on tasks that need the actual values, and it breaks on placeholders the model rewrites. Use it where policy requires it, not by default.
+
+## Secrets
+
+### Your own secrets
+
+- Store provider API keys, database credentials, and signing keys in a **secret manager**, never in code, images, or environment files in the repository.
+- Prefer **workload identity** over static keys where the platform supports it.
+- Rotate regularly and immediately after any suspected exposure. Design for rotation without downtime: support two active keys during a switch.
+- Use **separate keys per environment** and, for model providers, per workload (chat, ingestion, evals), so one can be revoked or rate limited without affecting others.
+
+### User OAuth tokens
+
+Tokens for connected accounts let the assistant act as users in other systems. They are high-value targets.
+
+- Encrypt with an application-level key, stored per user.
+- Store refresh tokens only where needed, and request minimal scopes.
+- Let users see and revoke connections. Revoke automatically when a user is deprovisioned.
+- Only the tool service can decrypt them.
+
+### Secrets users paste
+
+Users will paste API keys, passwords, and connection strings, often while asking for debugging help.
+
+- Detect common secret formats in input. Warn the user, and redact the secret in logs and traces even if the message is allowed.
+- Never echo detected secrets into analytics or eval datasets.
+
+## Logging hygiene
+
+Logs and traces are where sensitive data leaks most quietly. They are broadly accessible to engineers, retained for a long time, and often shipped to third-party platforms.
+
+| Rule | Detail |
+| --- | --- |
+| No content in application logs by default | Log IDs, sizes, timings, statuses. Not message text, prompts, or document content |
+| Content only in the trace store | With restricted access, short retention, and redaction applied |
+| Structured logging | Fields, not free text, so redaction can target fields reliably |
+| Error paths reviewed | Exceptions often include request bodies. Scrub before logging |
+| Third-party platforms covered | If traces go to an external observability vendor, it needs a data processing agreement and region control |
+| Access logged | Viewing a trace with content is itself an audit event |
+
+## Data protection in the UI
+
+- Show users what data the assistant can access, and where their conversations are stored and for how long.
+- Allow users to delete conversations and uploads, and make deletion real. See [Retention and deletion](/docs/data/retention).
+- Warn before sharing a conversation that it may contain sensitive content.
+
+## Checklist
+
+- [ ] TLS everywhere, including internal traffic and provider calls.
+- [ ] All stores and backups are encrypted at rest with KMS-managed keys.
+- [ ] Storage design allows per-tenant keys.
+- [ ] Provider terms cover training, retention, and region.
+- [ ] High-risk PII and secrets in user input are detected, with a warning or block.
+- [ ] Logs and traces are redacted, and application logs contain no content.
+- [ ] Secrets live in a secret manager, separate per environment and workload, and are rotatable.
+- [ ] User OAuth tokens are encrypted per user, minimally scoped, and revocable.
+- [ ] Access to traces with content is restricted and audited.

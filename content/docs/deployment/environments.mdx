@@ -1,0 +1,87 @@
+---
+title: Environments and CI/CD
+description: The environments an AI assistant needs, what data and models each one uses, and the pipeline stages that take a change from pull request to production.
+---
+
+Environments let you test changes before users see them. For an AI system, an environment is not just code and infrastructure: it is also data (the index), model access, and configuration. A staging environment with an empty index tells you nothing about retrieval quality.
+
+## Environments
+
+| Environment | Purpose | Data | Models | Who uses it |
+| --- | --- | --- | --- | --- |
+| Local | Development | Small fixture corpus, seeded test users and ACLs | Real APIs with a dev key, or a mock model for offline work | Developers |
+| Preview (per pull request) | Review a change running end to end | Fixture corpus | Real APIs, dev key | Reviewers |
+| Staging | Pre-production validation | Realistic synthetic or approved test corpus, with permission fixtures and canary documents | Same model routes as production | QA, AI team, automated checks |
+| Production | Real users | Real data | Production routes and keys | Users |
+| Eval | Running evaluations at scale | Eval datasets and their indexes | Production routes, separate keys and quota | CI, AI team |
+
+### Data in non-production environments
+
+Do not copy production data into staging or development. Production conversations and indexes contain confidential data, and lower environments have weaker access controls.
+
+Instead:
+
+- Build a **synthetic corpus** that resembles your real documents: similar formats, lengths, tables, languages, and permission structures.
+- Include **permission fixtures**: test users and groups with known access, and canary strings in restricted documents. See [Access control](/docs/security/access-control).
+- For tenants who want to test with their own data, offer a **sandbox tenant in production**, inside production's controls, rather than moving their data into staging.
+
+### Model access per environment
+
+- **Separate API keys or projects per environment**, so a runaway test cannot exhaust production quota, and costs are attributable.
+- **Lower quotas** in non-production environments.
+- **A mock model** for unit tests and local offline work: returns canned responses, tool calls, and streams with configurable delays. Fast, free, and deterministic.
+
+## Pipeline stages
+
+| Stage | Checks | Blocks merge or deploy? |
+| --- | --- | --- |
+| Lint, format, type check | Code style and types | Yes |
+| Unit tests | Logic, with the mock model | Yes |
+| Integration tests | Services with real database, index, and mock model | Yes |
+| Prompt rendering tests | Templates render, variables filled, within token budget | Yes |
+| Security scans | Dependencies, secrets in code, container images, infrastructure config | Yes, for high and critical |
+| Eval gates | Selected eval sets against thresholds. See [CI gates](/docs/evaluation/ci-gates) | Yes |
+| Permission tests | Canary-based access tests | Yes |
+| Build and sign images | Reproducible builds, signed artifacts | Yes |
+| Staging deploy and smoke tests | Deploy, then end-to-end checks and the smoke eval set against staging | Yes |
+| Production deploy | Rolling or blue-green deploy | Automatic or approved |
+| Post-deploy verification | Smoke set against production, error rate and TTFT watch | Triggers rollback |
+
+### Pull request checks versus main branch checks
+
+Fast checks run on every pull request. Slower and more expensive checks run when they are relevant, and nightly on main. Do not make every pull request wait 40 minutes for the full eval suite when it only changed a button.
+
+## Deploy strategy
+
+- **Rolling deploys** for stateless services, with readiness checks that include connectivity to the database, index, and model gateway.
+- **Graceful shutdown** matters more than usual: chat streams last tens of seconds. When an instance is draining, stop accepting new streams and let active ones finish, with a drain timeout longer than your longest expected answer, such as 2 to 3 minutes.
+- **Database migrations** run as a separate, backward-compatible step before the code that needs them. Old and new code must both work during a rolling deploy.
+- **Workers** drain their current job before stopping, or rely on idempotent retries.
+
+## Configuration management
+
+Runtime configuration, including model routes, prompt versions per environment, guardrail settings, feature flags, and kill switches, is:
+
+- **Stored in git** as the source of truth, reviewed in pull requests.
+- **Delivered to running services** through a config service or feature flag system, so changes apply without redeploying.
+- **Validated before applying**: unknown model names, missing prompt versions, or out-of-region providers are rejected.
+- **Audited**: every change records who, when, and the pull request.
+
+Emergency changes (opening a circuit breaker, flipping a kill switch) can be made directly by on-call, and are reconciled into git afterward.
+
+## Secrets per environment
+
+- Each environment has its own secrets in the secret manager. No shared provider keys between staging and production.
+- CI uses short-lived credentials from workload identity federation where possible, not long-lived keys stored in the CI system.
+- Preview environments get minimal secrets, scoped to fixture data.
+
+## Checklist
+
+- [ ] Staging has a realistic synthetic corpus with permission fixtures and canary documents.
+- [ ] Production data is never copied into lower environments.
+- [ ] Each environment has separate model API keys and quotas.
+- [ ] A mock model supports fast, deterministic unit and integration tests.
+- [ ] The pipeline includes prompt rendering tests, eval gates, and permission tests.
+- [ ] Deploys drain long-lived streams gracefully.
+- [ ] Runtime config is in git, validated, delivered without redeploys, and audited.
+- [ ] CI uses short-lived credentials.

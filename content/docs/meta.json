@@ -1,0 +1,17 @@
+{
+  "pages": [
+    "index",
+    "architecture",
+    "frontend",
+    "backend",
+    "ai-model",
+    "data",
+    "evaluation",
+    "security",
+    "responsible-ai",
+    "compliance",
+    "observability",
+    "deployment",
+    "developer-guide"
+  ]
+}

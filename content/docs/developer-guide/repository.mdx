@@ -1,0 +1,133 @@
+---
+title: Repository and Standards
+description: How the assistant's repository is organized, the coding conventions all code follows, and the rules specific to code that calls models, builds prompts, or handles retrieved content.
+---
+
+A consistent repository layout and a short list of firm rules make a codebase easier to work in, review, and audit. This page describes both. Most rules exist because breaking them caused a real problem somewhere.
+
+## Repository layout
+
+```text
+assistant/
+  apps/
+    web/                    frontend
+    api/                    HTTP API, orchestrator, SSE
+    workers/                ingestion, sync, eval, retention jobs
+  packages/
+    model-gateway/          provider adapters, routing, limits, cost
+    retrieval/              search, fusion, re-ranking, ACL filters
+    ingestion/              parsers, chunkers, enrichment, embedding
+    guardrails/             input, content, and output checks
+    tools/                  tool definitions and the tool service client
+    prompts/                prompt loader, renderer, token budgeting
+    shared/                 types, errors, event schemas, request context
+  prompts/                  versioned prompt templates (see below)
+  config/
+    model-routes.yaml
+    prompts.yaml
+    eval-gates.yaml
+  evals/
+    datasets/               golden, regression, safety, retrieval sets
+    judges/                 judge prompts and calibration data
+    runner/                 eval harness
+  infra/                    infrastructure as code
+  docs/
+    adr/                    architecture decision records
+    governance/             system card, use cases, model records
+    runbooks/
+```
+
+Why this layout:
+
+- **Model access, retrieval, guardrails, and tools are packages** with clear interfaces, so the orchestrator composes them, and each can be tested and replaced on its own.
+- **Prompts, routes, and gates are files in the repository**, reviewed like code and visible in diffs.
+- **Evals live next to the code** they test, and run in the same CI.
+- **Governance docs live in the repository**, so they update in the same pull request as the change they describe.
+
+## General conventions
+
+| Area | Convention |
+| --- | --- |
+| Language and style | One formatter and linter, enforced in CI. No style debates in review |
+| Types | Strict type checking. Shared types for API payloads and SSE events generated from one schema |
+| Errors | Use the shared error codes. See [Errors](/docs/backend/errors) |
+| Config | Read through a typed config module, validated at startup. No `process.env` scattered through code |
+| Logging | Through the structured logger. See [Logging](/docs/observability/logging) |
+| Time | UTC everywhere. Inject a clock in code that depends on time, so tests control it |
+| IDs | Prefixed IDs created by a shared helper |
+| Dependencies | Added through review, with a reason in the pull request. Pinned in lockfiles |
+
+## Rules for AI code
+
+These are firm. Reviewers block pull requests that break them.
+
+### Model calls
+
+- **All model calls go through the model gateway.** No provider SDK imports outside `packages/model-gateway`. A lint rule enforces this.
+- **Use logical model names** (`answer`, `fast`, `judge`), never concrete model IDs, outside route config.
+- **Every call sets an output token limit.**
+- **Every call receives the request context**, so tenant rules, tracing, budgets, and cancellation apply.
+
+### Prompts
+
+- **Prompts live in `prompts/` as versioned files.** No prompt text in application code, beyond trivial glue.
+- **Published versions are immutable.** To change a prompt, add a new version and update `config/prompts.yaml`.
+- **Templates use explicit variables.** Rendering fails on missing variables.
+- **Untrusted content is always delimited and escaped** using the renderer's helpers, never concatenated by hand.
+
+```ts
+// Wrong: hand-built prompt with untrusted text concatenated in
+const prompt = `Answer using these docs:\n${chunks.map((c) => c.text).join('\n')}\nQ: ${question}`;
+
+// Right: versioned template, renderer escapes and delimits sources
+const prompt = prompts.render('answer', ctx, { sources: chunks, question });
+```
+
+### Retrieval and data
+
+- **Every search goes through the retrieval package**, which requires a request context and applies tenant and ACL filters. There is no unfiltered search function exported.
+- **Never log content.** Use IDs.
+- **Cache keys include tenant ID** and, for anything derived from retrieval, permission scope. Use the shared cache key helper.
+
+### Tools
+
+- **Every tool declares `kind: read | write`.** Write tools go through confirmation. There is no way to mark a write tool as auto-run without an explicit, reviewed exception in config.
+- **Tool argument schemas are strict**: enums, lengths, and formats wherever possible.
+- **Tool results are compact**: a mapper selects the fields the model needs.
+
+### Output
+
+- **Model output is rendered only through the safe markdown component** in the frontend. No `dangerouslySetInnerHTML` or equivalent with model output.
+
+## Enforcing rules automatically
+
+Rules that depend on reviewers remembering them will eventually be broken. Automate what you can:
+
+| Rule | Enforcement |
+| --- | --- |
+| No provider SDKs outside the gateway | Lint rule restricting imports |
+| No raw HTML rendering of model output | Lint rule on the frontend |
+| Prompt versions immutable | CI check that published prompt files are unchanged |
+| Every tool declares kind | Schema validation of the tool registry at build time |
+| No content in logs | Logger API that only accepts allowed fields, plus collector redaction |
+| Unfiltered search impossible | Retrieval package does not export one |
+
+## Architecture decision records
+
+Significant decisions are recorded as ADRs in `docs/adr/`. Write one when you:
+
+- Add or replace a major dependency, such as a vector store or provider.
+- Change a cross-cutting pattern, such as how permissions are resolved.
+- Make a trade-off that future engineers will question.
+
+See the template in [Key decisions](/docs/architecture/decisions).
+
+## Checklist for new code
+
+- [ ] Model calls use the gateway, logical names, token limits, and the request context.
+- [ ] Prompts are versioned files rendered through the template engine.
+- [ ] Search goes through the retrieval package with filters applied.
+- [ ] Logs contain IDs, not content.
+- [ ] Cache keys use the shared helper.
+- [ ] New tools declare read or write, with strict schemas and compact results.
+- [ ] Model output reaches the browser only through the safe renderer.

@@ -1,0 +1,91 @@
+---
+title: Transparency
+description: What users, administrators, and auditors are told about the assistant, how AI-generated content is labeled, and the system documentation that should exist.
+---
+
+Transparency means people know when they are dealing with AI, what it can and cannot do, what data it uses, and how it reached an answer. It builds appropriate trust: enough to use the assistant, not so much that people stop checking. Several regulations, including the EU AI Act, also require it.
+
+## What users should know
+
+| Topic | Where users see it |
+| --- | --- |
+| They are talking to an AI | Product name and UI make it obvious. The assistant never claims to be a person |
+| What it can access | Empty state and settings: "I can search Wiki, HR Drive, and IT tickets you have access to" |
+| What it cannot do | Brief limits: may make mistakes, does not know information outside these sources, cannot make HR or legal decisions |
+| Where answers come from | Citations on every factual answer |
+| How old sources are | Last-updated dates on citations |
+| What happens to their data | Short privacy notice: what is stored, for how long, who can see it, whether a provider processes it |
+| How to give feedback or report problems | Feedback buttons, report action, contact |
+
+Keep notices short and placed where they matter. One clear line in the empty state does more than a long policy page nobody opens. Link to the full policy for those who want it.
+
+## Labeling AI-generated content
+
+When content created with the assistant leaves the assistant, consider whether recipients should know.
+
+| Content | Labeling |
+| --- | --- |
+| Answers inside the assistant | Implicit, the UI is clearly an AI assistant |
+| Drafts the user edits and sends as their own | Generally not required. The user is the author and is responsible |
+| Automated messages sent without human editing | Label as AI-generated |
+| Generated images, audio, or video | Label, and use provenance metadata such as C2PA where supported |
+| Content published externally | Follow your company's policy and applicable law |
+
+## Explaining answers
+
+Users cannot see inside the model, but they can see the evidence.
+
+- **Citations** linked to exact passages are the main explanation. "This is what the answer is based on."
+- **Status steps** during generation show what happened: searched which sources, read how many documents, used which tool.
+- **"No sources found"** is explicit, not disguised as a normal answer.
+- **Confidence language** in the prompt: the model notes when sources conflict or are old, rather than presenting everything with the same certainty.
+
+Avoid fake explanations, such as the model generating a "reasoning" paragraph after the fact that may not reflect how the answer was actually produced. Show real evidence instead.
+
+## Documentation for administrators
+
+Tenant administrators need more detail to configure and govern the assistant in their organization.
+
+- Which model providers process data, in which regions, under what terms.
+- What data is stored, where, and default retention, with configuration options.
+- Which connectors exist, what they read, and how permissions are mirrored.
+- Which guardrails are active, and what can be configured.
+- Usage and audit reports available.
+- How to disable features, tools, or the whole assistant.
+
+## System documentation
+
+Internally, and for auditors and enterprise customers, maintain documentation that describes the system as built. Keep it in the repository and update it with changes.
+
+### System card
+
+One document per assistant or major use case:
+
+| Section | Content |
+| --- | --- |
+| Purpose | Intended use, users, prohibited uses |
+| Architecture | Components, data flow, models used for each task |
+| Data | Sources, data categories, retention, providers |
+| Evaluation | Datasets, metrics, latest results, known weaknesses by topic and language |
+| Safety | Guardrails, red team summary, open risks and their owners |
+| Human oversight | Where approval is required, who reviews what |
+| Limitations | What it does poorly, where users should be careful |
+| Change log | Major model, prompt, and capability changes with dates |
+
+### Model records
+
+For each model in use: provider and exact version, what it is used for, evaluation results that justified the choice, data terms, and the deprecation date. The [model gateway](/docs/ai-model/model-selection) configuration is the source of truth for which model is live, and the record explains why.
+
+## Transparency to affected people
+
+If a reviewed use case affects people who are not users, such as employees whose case files are summarized for HR, they may have a right to know AI was involved, and to request human review. Work with legal to define what notice they receive and how they can ask questions. See [Compliance](/docs/compliance).
+
+## Checklist
+
+- [ ] The UI makes clear the user is talking to an AI.
+- [ ] Users see what sources the assistant can access and its main limits.
+- [ ] Every factual answer has citations with dates.
+- [ ] A short privacy notice explains storage, retention, and provider processing.
+- [ ] Automated, unedited outbound content is labeled as AI-generated.
+- [ ] Admins have documentation of providers, data, retention, guardrails, and controls.
+- [ ] A system card and model records are maintained in the repository.

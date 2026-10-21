@@ -1,0 +1,98 @@
+---
+title: Human Oversight
+description: Where people must approve, review, or be able to stop what the assistant does, how to design those checkpoints so they are real rather than rubber stamps, and how oversight scales.
+---
+
+Human oversight means people stay in control of what matters. It is required by many regulations for higher-risk AI uses, and it is the most reliable protection against model errors and manipulation. But oversight that is badly designed becomes a rubber stamp: people click "approve" without reading, and the control exists only on paper.
+
+## Levels of oversight
+
+| Level | Description | Use for |
+| --- | --- | --- |
+| **Human in the loop** | A person must approve before anything happens | Side effects: sending, writing, deleting, paying. High-tier decisions |
+| **Human on the loop** | The system acts, people monitor and can intervene or reverse | Low-risk, reversible automation at volume |
+| **Human in command** | People decide where and whether the system is used at all, and can switch it off | Every deployment |
+
+## Where approval is required
+
+| Action | Oversight | Notes |
+| --- | --- | --- |
+| Answering a question | None per answer | The user reads and judges the answer. Citations make this possible |
+| Creating a ticket, drafting a message | User confirms with exact values | See [Agents and tools](/docs/ai-model/agents-tools) |
+| Sending a message to others | User reviews and sends | Never auto-send on the user's behalf by default |
+| Changing records in business systems | User confirms, with a diff | Show what changes, not just the final state |
+| Bulk actions (more than a few items) | User confirms with a count and preview, plus a second step for large numbers | Bulk mistakes are expensive |
+| Anything in a high-tier use case | A qualified person makes the decision. The AI only assists | The decision record names the person |
+
+## Designing approvals that work
+
+The approval step must give the person what they need to make a real decision, and nothing that encourages them to skip it.
+
+**Show exactly what will happen.**
+
+| Weak confirmation | Strong confirmation |
+| --- | --- |
+| "Create the ticket? Yes / No" | Title, description, priority, queue, all visible and editable, with the target system named |
+| "Update the record?" | A diff: Status: Open to Closed. Owner: Ana to Ben |
+| "Send the email?" | Full recipient list, subject, and body, with external recipients highlighted |
+
+**Make editing easy.** If the model got one field wrong, the user fixes it in place instead of rejecting and re-prompting.
+
+**Highlight what is unusual.** External email recipients, large amounts, high priority, irreversible actions. Users skim. Draw attention where it matters.
+
+**Avoid approval fatigue.** If users confirm twenty trivial actions a day, they stop reading. Reserve confirmations for real side effects, batch related actions into one review, and never require confirmation for read-only steps.
+
+**Make the click count.** Confirmation must be a UI action on a structured card, never inferred from text like "yes, go ahead". Injected text cannot click buttons. See [Prompt injection](/docs/security/prompt-injection).
+
+## Reviewing output that reaches others
+
+When the assistant drafts content that others will receive, such as a customer reply or a summary for a manager, the person sending it is responsible for it.
+
+- Present it as a **draft**, clearly labeled, in an editor.
+- Show the sources used, so the reviewer can check facts.
+- For medium and high-tier use cases, require the reviewer to actively open or edit before sending is enabled, or show a brief checklist.
+- Track how often drafts are sent unedited. Very high rates in a high-stakes use case may signal rubber-stamping, and are worth a closer look.
+
+## Assisting decisions about people
+
+If a reviewed, high-tier use case involves decisions about people (for example, summarizing a complaint file for an HR case handler):
+
+- The AI provides information, never a recommendation or score about the person, unless a specific, assessed use case requires it.
+- The decision-maker sees the underlying sources, not just the summary.
+- The decision is recorded with the human decision-maker's name and reasons.
+- Affected people can request human review, as many regulations require.
+
+## Stopping and reversing
+
+Human in command means people can stop the system.
+
+| Control | Who | Effect |
+| --- | --- | --- |
+| Stop generation | User | Stops the current answer |
+| Reject an action | User | The action does not happen |
+| Disable a tool | Tenant admin | Tool removed for all users |
+| Disable a feature or use case | Tenant admin or platform team | Feature off, with a clear message to users |
+| Kill switch for the whole assistant | Platform team, on-call | Assistant shows a maintenance message |
+| Reverse an action | User or admin | Where the target system supports it, link directly to undo |
+
+Test the kill switches. A switch that has never been flipped may not work when needed.
+
+## Oversight at scale: monitoring
+
+People cannot review every answer, but they can review samples and signals.
+
+- Weekly review of sampled answers by domain owners, including negative feedback.
+- Review of all write actions above a risk threshold, after the fact.
+- Alerts on unusual patterns: a spike in rejected actions, a user performing many bulk actions, guardrail blocks concentrated on one topic.
+- Periodic review of high-tier use cases against their impact assessment.
+
+## Checklist
+
+- [ ] Every side effect requires explicit confirmation through a structured card.
+- [ ] Confirmations show exact values or diffs and allow editing.
+- [ ] Unusual or high-impact details are highlighted.
+- [ ] Read-only steps never require confirmation, to avoid fatigue.
+- [ ] Drafts for others are labeled, editable, and show sources.
+- [ ] High-tier decisions are made and recorded by a named person.
+- [ ] Admins can disable tools and features, and kill switches are tested.
+- [ ] Sampled human review and anomaly alerts run continuously.

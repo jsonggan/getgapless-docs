@@ -1,0 +1,109 @@
+---
+title: Error and Empty States
+description: Every failure and empty state a user can see in an AI assistant, what causes each one, and what the interface should show and offer.
+---
+
+AI systems fail more often and in more ways than typical web apps. Providers rate limit, models time out, guardrails block content, retrieval finds nothing, and uploads fail to parse. Each failure needs a specific message and a specific next step. A generic "Something went wrong" makes users give up on the tool.
+
+## Principles
+
+- **Say what happened in plain words.** "The AI service is busy" is better than "Error 503".
+- **Say what the user can do.** Retry, wait, rephrase, or contact someone.
+- **Keep the user's work.** Never lose a typed message or a partial answer because of an error.
+- **Show a reference ID.** A short trace ID lets support find the exact request. Show it small, with a copy button.
+- **Do not blame the user** for system failures, and do not hide user errors behind vague text.
+
+## Error catalog
+
+The backend sends an `error` event or HTTP error with a stable `code`. The frontend maps each code to a message and an action. Keep this mapping in one file.
+
+| Code | Cause | What to show | Action |
+| --- | --- | --- | --- |
+| `rate_limited` | User sent too many messages too fast | "You are sending messages faster than allowed. You can send again in 20 seconds." | Countdown, then auto-enable send |
+| `quota_exceeded` | Daily or monthly token budget used up | "You have reached today's usage limit. It resets at midnight UTC." | Link to usage page or admin contact |
+| `provider_unavailable` | Model provider outage after fallback also failed | "The AI service is temporarily unavailable. Your message is saved." | Retry button |
+| `timeout` | Model took too long | "The response took too long. Try again, or ask a shorter question." | Retry button |
+| `context_too_long` | Conversation or attachment exceeds the model's limit | "This conversation is too long for the assistant to read in full. Start a new chat to continue." | New chat button with option to carry a summary |
+| `input_blocked` | Input guardrail rejected the message | "This message can't be processed because it may contain sensitive data, such as a card number." | Edit message |
+| `output_blocked` | Output guardrail rejected the answer | "The response was withheld because it did not meet content guidelines." | Rephrase, or report if wrong |
+| `unauthorized` | Session expired | Silent token refresh. If it fails: "Your session expired. Sign in again." | Sign-in, then resend automatically |
+| `forbidden` | User lacks access to a feature, tool, or document | "You don't have access to this. Ask your admin for access to X." | Show who to ask, if known |
+| `tool_failed` | An action against another system failed | "Creating the ticket failed: the IT queue is closed for maintenance." Pass through the target system's reason | Retry, or open the system directly |
+| `upload_failed` | File too big, unsupported type, encrypted, or unreadable | Specific reason: "PDF is password protected" | Remove and choose another file |
+| `stream_interrupted` | Connection dropped mid-answer | "Connection lost. Reconnecting." then "Couldn't reconnect" | Automatic reconnect, then retry button |
+| `internal` | Unexpected server error | "Something went wrong on our side. Reference: 7f3a9c" | Retry and copy reference |
+
+Mark each code as **retryable** or not in the backend response. Show a retry button only for retryable errors. Retrying `input_blocked` will just fail again.
+
+## Blocked content needs care
+
+Guardrail blocks are the errors users most often think are wrong. A legitimate question about medication dosages or a security vulnerability may be blocked by an overcautious filter.
+
+- Explain the category without revealing how the filter works: "may contain sensitive personal data", not the exact rule.
+- Always offer a **"This was a mistake"** report button. Those reports are the main input for tuning false positives. See [Guardrails](/docs/responsible-ai/guardrails).
+- If an output block happens after text was already shown, replace the text with the notice. Do not leave the blocked text in the DOM, the copy buffer, or local storage.
+
+## Partial failures
+
+Many failures are partial. The UI should show what worked.
+
+- **Some sources unavailable.** "I searched the wiki and drive. Jira was unavailable, so ticket history was not included." The answer is still useful, but the user knows its limits.
+- **Answer stopped midway.** Keep the partial text, mark it as incomplete, and offer to continue or regenerate.
+- **Tool succeeded, follow-up failed.** "The ticket was created (link). I couldn't add the attachment." Never let a later failure hide that a side effect already happened.
+
+## Empty states
+
+Empty states are the first thing new users see. Use them to teach.
+
+### New conversation
+
+Show:
+
+- One line on what the assistant can do, specific to your company: "Ask about HR policies, IT help, or upload a document to summarize."
+- Three or four example prompts as clickable chips. Choose examples that showcase real, working use cases and change them based on what users actually succeed with.
+- What the assistant can see: "I can search: Wiki, HR Drive, IT Tickets." This prevents the common confusion about why it cannot find a document.
+
+### No conversations yet
+
+A short welcome and a single "Start a conversation" action.
+
+### No search results in conversation history
+
+"No conversations match 'budget'." with a clear-search action.
+
+### No documents uploaded
+
+Explain supported types and size limits before the user tries.
+
+### Retrieval found nothing
+
+This is an answer, not an error. The message should say plainly that nothing relevant was found in the sources the user can access, list which sources were searched, and suggest rephrasing or checking access. See [Chat UI](/docs/frontend/chat-ui).
+
+## Loading states
+
+| Wait | Show |
+| --- | --- |
+| Under about 300 ms | Nothing. A flash of a spinner feels slower than no spinner |
+| Before the first token | A status line that changes as steps complete: "Searching documents", "Reading 5 sources", "Writing answer" |
+| Tool running | The tool card with a spinner and the tool name: "Searching tickets" |
+| Upload processing | Progress per file, and a clear "Ready" state |
+| Long job | Progress with counts, such as "Indexed 120 of 300 files", and a note that the user can leave the page |
+
+Status lines before the first token make waits feel much shorter, because the user sees the system working. Send them as `status` events from the orchestrator. Do not fake them on a timer in the frontend, because fake progress becomes obviously wrong when something actually fails.
+
+## Offline
+
+- Detect offline with the `online` and `offline` events.
+- Show a banner, disable send, and keep the draft.
+- When back online, refetch the conversation and resume or retry any interrupted stream.
+
+## Checklist
+
+- [ ] Every backend error code maps to a specific message and action in one place.
+- [ ] Retry is shown only for retryable errors.
+- [ ] Typed messages and partial answers are never lost on error.
+- [ ] Errors show a copyable reference ID.
+- [ ] Blocked content has a "This was a mistake" report action.
+- [ ] Partial failures say which part failed and which side effects already happened.
+- [ ] The new conversation screen lists example prompts and the sources the assistant can search.
+- [ ] Pre-token status lines come from real server events.

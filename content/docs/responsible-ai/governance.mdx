@@ -1,0 +1,117 @@
+---
+title: Governance Process
+description: The lightweight process for approving use cases and changes, writing impact assessments, keeping documentation current, and reviewing incidents, without slowing teams down.
+---
+
+Governance answers: who decided this, based on what, and who is watching it now? Done well, it is a few templates, clear thresholds, and a small group that meets regularly. Done badly, it is a months-long approval queue that teams route around.
+
+## What needs approval
+
+| Change | Approval | Evidence required |
+| --- | --- | --- |
+| Bug fixes, UI changes | Normal code review | Tests |
+| Prompt change | Code review plus eval owner | Eval report from CI |
+| Model change (same task) | AI lead | Eval report including safety and slices. Data terms of the new model checked |
+| New model provider | AI lead plus security and privacy | Vendor review, data processing agreement, eval report |
+| New connector or data source | Product owner plus security | Permission mapping verified, scope defined |
+| New tool with side effects | Product owner plus security | Threat model for the tool, confirmation design, tests |
+| New low-tier use case | Product owner | Eval set for the use case |
+| New medium-tier use case | Product owner plus domain owner | Risk assessment, eval set, human review design |
+| New high-tier use case | Responsible AI review group | Impact assessment, bias testing, legal review, monitoring plan |
+
+Make the low-risk paths fast. Most changes should need nothing beyond code review and an automated eval report.
+
+## Impact assessment
+
+Required for high-tier use cases. Keep the template short enough that people fill it in honestly.
+
+```markdown
+# Impact assessment: Contract risk screening
+
+## Use case
+What it does, who uses it, what decisions it informs.
+
+## People affected
+Users, and anyone the output is about or sent to.
+
+## Benefits
+Measurable: time saved, errors caught.
+
+## Risks
+| Risk | Likelihood | Severity | Mitigation | Owner |
+| Missed risky clause | Medium | High | Lawyer reviews every contract; tool is an aid | Legal ops |
+| Over-reliance on summary | Medium | Medium | Clause-level citations; training | Legal ops |
+| Confidential data exposure | Low | High | Matter-level permissions; no cross-matter retrieval | Security |
+
+## Data
+Sources, categories, retention, providers, legal basis.
+
+## Evaluation
+Datasets, results, slice results, red team summary, known weaknesses.
+
+## Human oversight
+Who decides, what they see, how decisions are recorded.
+
+## Monitoring
+Metrics, review cadence, triggers for re-assessment.
+
+## Decision
+Approved / approved with conditions / rejected. By whom. Date. Review date.
+```
+
+The **review date** matters. Assessments go stale as models, data, and usage change. Reassess yearly, and after any major change to the model or use case.
+
+## Documentation that stays current
+
+Governance documentation fails when it lives in a separate system nobody updates. Keep it next to the code:
+
+```text
+docs/governance/
+  system-card.md
+  use-cases/
+    policy-qa.md                 (low tier)
+    customer-reply-drafts.md     (medium tier, risk assessment)
+    contract-screening.md        (high tier, impact assessment)
+  models.md                      (model records)
+  adr/                           (architecture decision records)
+```
+
+Require updates to these files in the same pull request as the change they describe. A pull request that adds a tool without updating the use case document fails review.
+
+## Incident review
+
+An AI incident is any event where the assistant caused or nearly caused harm: a data leak, a harmful answer that was acted on, an unauthorized action, a biased output that reached someone.
+
+1. **Respond**: contain the issue using the security incident process. See [Infrastructure security](/docs/security/infrastructure).
+2. **Record**: what happened, who was affected, the trace, and the timeline.
+3. **Review** within two weeks, blameless: root cause in the system, not "the model made a mistake". Why did the controls not catch it?
+4. **Act**: fixes with owners, new test cases in the safety or regression set, documentation updates.
+5. **Report**: to the review group, and to affected tenants and regulators where required.
+
+Track near misses too, such as a guardrail that caught something serious, or a user who rejected a harmful action. They show where the controls are being tested.
+
+## Regular reviews
+
+| Review | Cadence | Participants |
+| --- | --- | --- |
+| Quality and safety metrics | Weekly | AI team |
+| Sampled answer review | Weekly | Domain owners |
+| Use case portfolio and incidents | Monthly | Review group |
+| High-tier use case reassessment | Yearly or on change | Review group, domain owner, legal |
+| Red team exercise | Twice a year | AI, security, domain teams |
+| Policy and prohibited uses | Yearly | Review group, legal |
+
+## Regulation
+
+Rules for AI vary by jurisdiction and change often. The EU AI Act, for example, sets obligations based on risk level, with stricter requirements for high-risk uses such as employment decisions. Sector rules (finance, health) and data protection law (GDPR and others) also apply.
+
+The process on this page, with risk tiers, impact assessments, documentation, human oversight, and monitoring, is the foundation most of these rules expect. Work with legal counsel to map your specific obligations. See [Compliance and legal](/docs/compliance).
+
+## Checklist
+
+- [ ] Approval requirements are defined per type of change, with fast paths for low risk.
+- [ ] High-tier use cases have impact assessments with review dates.
+- [ ] Governance documents live in the repository and update with the code.
+- [ ] Incidents and near misses get blameless reviews that produce test cases.
+- [ ] Regular reviews run on a fixed cadence.
+- [ ] Legal has mapped applicable regulations to the process.

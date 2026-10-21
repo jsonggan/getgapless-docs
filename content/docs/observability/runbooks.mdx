@@ -1,0 +1,162 @@
+---
+title: Runbooks and Incidents
+description: Step-by-step runbooks for the most common AI assistant incidents, how on-call works, how incidents are run and communicated, and how postmortems feed improvements.
+---
+
+A runbook tells the on-call engineer what to check and what to do for a specific alert, so they do not have to work it out at 3 a.m. This page includes runbooks for the incidents AI assistants hit most often, and the incident process around them.
+
+## Runbook format
+
+Keep every runbook short and in the same shape:
+
+```markdown
+# Runbook: <alert name>
+
+## Meaning
+What the alert means for users, in one or two sentences.
+
+## Check
+1. Dashboard link and what to look at.
+2. Commands or queries to confirm the cause.
+
+## Mitigate
+Fast actions that reduce user impact, in order.
+
+## Resolve
+Steps to fix the underlying cause.
+
+## Escalate
+Who to call, and when.
+```
+
+Link each alert directly to its runbook. Update the runbook after every incident where it was wrong or incomplete.
+
+## Runbook: model provider degraded
+
+**Meaning.** Model calls for a route are failing or very slow. Users see errors, long waits, or fallback-quality answers.
+
+**Check**
+1. Model layer dashboard: error rate, TTFT, and 429s by provider, model, and region.
+2. The provider's status page.
+3. Circuit breaker state for the affected model.
+4. Fallback rate: is traffic already moving to the fallback?
+
+**Mitigate**
+1. If the circuit breaker has not opened, force it open for the affected model and region, so traffic goes to fallback immediately.
+2. If the fallback is also struggling, switch the route to a different provider or region with a config change.
+3. If all options are degraded, enable a user-facing banner: "The assistant is slower than usual."
+4. Pause batch work (evals, re-embedding, bulk summaries) to free provider capacity for chat.
+
+**Resolve.** Wait for provider recovery. Close the breaker in stages. Review whether fallback capacity and quotas were sufficient.
+
+**Escalate.** Provider support through your enterprise channel, with request IDs from traces.
+
+## Runbook: TTFT degradation without errors
+
+**Meaning.** Answers start slowly. No errors.
+
+**Check**
+1. Trace samples of slow requests: which span grew? Retrieval, re-rank, guardrails, or the model call?
+2. Input tokens per request: did prompts get larger? A prompt or context change, or a tenant with very long custom instructions?
+3. Prompt cache hit rate: did it drop? A change may have broken the stable prefix.
+4. Provider TTFT for the same model from the provider's own metrics or status.
+
+**Mitigate.** Roll back the most recent prompt, context, or retrieval change if timing matches. If the re-ranker is slow, reduce the candidate count temporarily.
+
+**Resolve.** Fix the root cause, then add a token budget or latency test that would have caught it.
+
+## Runbook: answers going stale or "not found" spike
+
+**Meaning.** Users get outdated answers, or the assistant cannot find documents that exist.
+
+**Check**
+1. Connector dashboard: last successful sync per connector for the affected tenant.
+2. Freshness lag and ingestion queue age.
+3. Connector errors: auth failures (expired credentials, revoked app consent), API throttling.
+4. Canary document results per source.
+
+**Mitigate.** Notify the tenant admin if their connector credentials expired or consent was revoked. Restart stuck workers. Raise ingestion priority for the affected tenant.
+
+**Resolve.** Fix the connector, then trigger an incremental sync and confirm canaries pass.
+
+## Runbook: possible data exposure
+
+**Meaning.** Someone may have seen content they should not have: a chunk without an ACL was retrieved, a user reported seeing restricted content, or a cross-tenant check failed. **Treat as a security incident.**
+
+**Check**
+1. Identify the documents and chunks involved, and how they reached the answer: missing ACL, stale permissions, cache, or shared conversation.
+2. Using message sources, find every answer that used those chunks, and which users received them.
+
+**Mitigate**
+1. Remove the affected documents from the index, or disable the affected connector or feature.
+2. If a cache is involved, flush it.
+3. Engage security and privacy immediately.
+
+**Resolve.** Fix the root cause, add a permission test case that reproduces it, and support the notification process that security and legal decide on.
+
+## Runbook: prompt injection detected in content
+
+**Meaning.** A document or tool result contains instructions aimed at the assistant.
+
+**Check.** Which document, who can edit it, which answers used it, and whether any tool actions or outbound links followed.
+
+**Mitigate.** Quarantine the document from the index. Search for similar content across the tenant. Disable the affected tool if an action was attempted.
+
+**Resolve.** Inform the document owner and security. Add the case to the safety set.
+
+## Runbook: cost spike
+
+**Meaning.** Spend is far above normal.
+
+**Check**
+1. Cost dashboard by tenant, feature, user, and model.
+2. Agent step limit hits and long conversations.
+3. Retry rates, and any batch job started recently.
+4. Unusual activity from one API key or user, which might indicate abuse or a leaked key.
+
+**Mitigate.** Lower the budget for the affected tenant or user. Pause the batch job. Revoke a suspected leaked key.
+
+**Resolve.** Fix the loop or job. Add limits that would have stopped it.
+
+## On-call
+
+- A primary and secondary on-call, with a clear schedule and handover.
+- On-call engineers have access to dashboards, traces with metadata, config changes (circuit breakers, routes, feature flags, kill switches), and runbooks, without needing to deploy code.
+- Access to prompt content in traces requires an explicit, logged step, even for on-call.
+- AI-specific expertise is available as an escalation: someone who understands retrieval and prompts.
+
+## Running an incident
+
+| Severity | Example | Response |
+| --- | --- | --- |
+| SEV1 | Assistant down for all users, confirmed data exposure | Incident lead, immediate all-hands response, customer communication |
+| SEV2 | Major degradation for many users, one large tenant down, unauthorized action | Incident lead, focused team, status page update |
+| SEV3 | Partial degradation, workaround exists | On-call handles during working hours |
+
+During an incident:
+
+1. **Declare it** with a severity, an incident lead, and a channel.
+2. **Mitigate first.** Roll back, fail over, or disable a feature before searching for the root cause.
+3. **Communicate** on a fixed cadence: internal updates every 30 minutes, status page for user-visible incidents.
+4. **Record** a timeline as you go.
+
+## Postmortems
+
+After every SEV1 and SEV2, and for interesting SEV3s, write a blameless postmortem within a week:
+
+- Summary and impact: who was affected, for how long, how badly.
+- Timeline.
+- Root cause and contributing factors. In AI incidents, ask why evaluation, guardrails, and monitoring did not catch it earlier.
+- What went well, what went poorly.
+- Action items with owners and dates, including new tests, alerts, and runbook updates.
+
+Track action items to completion. A postmortem whose actions never ship is a story, not an improvement.
+
+## Checklist
+
+- [ ] Every alert links to a runbook in the standard format.
+- [ ] Runbooks exist for provider degradation, latency, staleness, data exposure, injection, and cost spikes.
+- [ ] On-call can change routes, breakers, feature flags, and kill switches without a deploy.
+- [ ] Incidents have severities, a lead, a channel, and a communication cadence.
+- [ ] Mitigation comes before root cause analysis.
+- [ ] Blameless postmortems produce tracked action items, including new tests and alerts.

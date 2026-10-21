@@ -1,0 +1,113 @@
+---
+title: Key Decisions
+description: The major technology choices in an enterprise AI system, the options for each, and how to choose, plus a template for recording decisions.
+---
+
+Some decisions are cheap to change later, such as a UI library. Others shape everything that follows, such as where your data lives or whether you depend on one model provider. This page covers the expensive ones. For each, it lists the options, what each costs, and a default that works for most teams.
+
+Record each decision you make as an **architecture decision record (ADR)**. A template is at the end of this page.
+
+## 1. Hosted models vs self-hosted models
+
+| | Hosted API (OpenAI, Anthropic, Google, Azure, Bedrock) | Self-hosted open-weight models (Llama, Mistral, Qwen on vLLM or TGI) |
+| --- | --- | --- |
+| Quality | Best available frontier models | Good, usually a step behind the frontier |
+| Setup time | Minutes | Weeks: GPUs, serving stack, scaling, monitoring |
+| Cost at low volume | Low, pay per token | High, GPUs cost money while idle |
+| Cost at very high volume | Can become the largest bill | Can be cheaper per token if GPUs stay busy |
+| Data control | Data leaves your network. Mitigated by enterprise terms, zero data retention, and regional endpoints | Data stays inside your network |
+| Operations | Provider handles it | You handle capacity, upgrades, and outages |
+
+**Default:** start with hosted models through a cloud provider your company already has a contract with. The enterprise terms, regional hosting, and existing security review remove most objections. Revisit self-hosting when one of these is true: a customer contract requires it, a single workload is large and steady enough to keep GPUs busy, or you need a fine-tuned small model for one narrow task.
+
+Either way, put a **model gateway** in front of all models. It is what makes this decision reversible.
+
+## 2. One provider vs several
+
+Depending on one provider is simple, but provider outages and rate limits happen. Prices and model rankings also change every few months.
+
+**Default:** design for several, ship with one primary and one fallback. The model gateway exposes one internal API, and each provider gets an adapter. Keep prompts portable: avoid relying on features only one provider has, unless the gain is large and you have a plan to replace it.
+
+## 3. Framework vs your own orchestration code
+
+Frameworks like LangChain, LlamaIndex, Semantic Kernel, and agent SDKs from model providers give you retrieval, tool calling, and agent loops out of the box.
+
+| | Framework | Own code |
+| --- | --- | --- |
+| Speed to first demo | Fast | Slower |
+| Understanding what the prompt actually is | Harder, abstractions hide it | Easy, you build it |
+| Debugging production issues | Harder, you debug the framework too | Easier |
+| Upgrades | Frequent breaking changes in fast-moving libraries | You control the pace |
+
+**Default:** use a provider's official SDK for API calls, and write the orchestration yourself. The core loop of retrieve, build prompt, call model, and call tools is a few hundred lines. Owning it means you always know exactly what was sent to the model. Use frameworks for pieces that are genuinely hard, such as document parsers, and keep them behind your own interfaces.
+
+## 4. Vector store
+
+| Option | Good for | Watch out for |
+| --- | --- | --- |
+| **Postgres with pgvector** | Up to tens of millions of chunks. You already run Postgres. Metadata filters and joins are easy | Tuning HNSW indexes. Heavy vector load competes with your app database, so use a separate instance |
+| **OpenSearch or Elasticsearch** | Hybrid keyword and vector search in one engine. Mature filtering | Operational weight. Memory-hungry vector indexes |
+| **Dedicated vector database** (Pinecone, Weaviate, Qdrant, Milvus) | Large scale, managed options, built-in namespaces per tenant | Another system and vendor. Keyword search quality varies |
+| **Cloud AI search** (Azure AI Search, Vertex AI Search) | Managed hybrid search with connectors | Less control over ranking. Vendor lock-in |
+
+**Default:** Postgres with pgvector plus Postgres full-text search, on a dedicated instance, until you pass about 10 million chunks or need features it lacks. It keeps your stack small, and ACL filters are ordinary SQL. Move to OpenSearch or a dedicated store when scale or hybrid ranking quality demands it. Keep retrieval behind a service interface so the move does not touch the orchestrator.
+
+## 5. RAG vs fine-tuning vs long context
+
+These solve different problems. Teams often reach for fine-tuning when they need retrieval.
+
+| Need | Right tool | Why |
+| --- | --- | --- |
+| Answer from company documents that change | **RAG** | Fresh data, citations, permission filtering. Fine-tuning cannot do any of these |
+| Answer about one long document the user provides | **Long context** | Put the whole document in the prompt if it fits |
+| Consistent output format or tone | **Prompting first**, then fine-tuning | Good examples in the prompt usually suffice |
+| A narrow, high-volume task where a big model is too slow or costly | **Fine-tune a small model** | A small model trained on good examples can match a large one on one task |
+| Teach the model new facts | **Not fine-tuning** | Fine-tuning is unreliable for facts and cannot be updated or permission-filtered |
+
+**Default:** RAG for knowledge, long context for user-supplied documents, prompting for behavior. Fine-tune only with an evaluation set that proves it beats prompting.
+
+## 6. Monolith vs services
+
+AI teams sometimes split into many microservices early: one for embeddings, one for chat, one for retrieval, one for guardrails. Each split adds a network hop, a deploy, and a failure mode.
+
+**Default:** one backend application with clear internal modules, plus separate workers for background jobs. Split a module into a service only when it has a different scaling profile (GPU inference), a different team, or a different security boundary (tool execution with powerful credentials).
+
+## 7. Where prompts live
+
+| Option | Benefit | Cost |
+| --- | --- | --- |
+| In code, as template files in the repo | Reviewed in pull requests, tested in CI, versioned with git | A prompt change needs a deploy |
+| In a prompt management service or database | Non-engineers can edit, change without deploy | Easy to change production behavior with no review or eval |
+
+**Default:** prompts in the repo. Deploys should be fast enough that this is not a burden. If product or domain experts need to iterate, give them a playground that reads from a branch, and merge through the normal review and eval process. See [Prompts](/docs/ai-model/prompts).
+
+## Decision record template
+
+Write one record per decision. Keep it short. Store records in the repo, for example `docs/adr/0007-vector-store.md`, and never delete them. If a decision changes, write a new record that supersedes the old one.
+
+```markdown
+# ADR 0007: Use Postgres with pgvector as the vector store
+
+Status: Accepted
+Date: 2026-03-14
+Deciders: Platform team
+
+## Context
+We need vector search over about 2 million chunks with ACL filtering.
+We already run Postgres. The team has no OpenSearch experience.
+
+## Options considered
+1. Postgres with pgvector
+2. OpenSearch
+3. Managed vector database
+
+## Decision
+Option 1, on a dedicated Postgres instance.
+
+## Consequences
+- ACL filters are plain SQL joins.
+- We must tune HNSW parameters and monitor recall.
+- Revisit if the corpus passes 10 million chunks or p95 search latency passes 300 ms.
+```
+
+The last line matters most. A good decision record says **when to revisit it**, so the decision is reopened by evidence, not by opinion.

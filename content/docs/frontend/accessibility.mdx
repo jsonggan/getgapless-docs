@@ -1,0 +1,129 @@
+---
+title: Accessibility and i18n
+description: How to make a streaming chat interface usable with screen readers and keyboards, and how to support many languages and right-to-left scripts.
+---
+
+Enterprise software is often legally required to meet accessibility standards, usually WCAG 2.2 level AA. Beyond the law, a meaningful share of every workforce uses assistive technology, keyboard navigation, zoom, or high contrast. Chat interfaces have specific problems here, mostly caused by streaming.
+
+## Screen readers and streaming
+
+### The problem
+
+Screen readers announce changes to regions marked as **live regions**. If the message list is a live region and the answer streams in token by token, the screen reader either announces every fragment, interrupts itself constantly, or announces nothing useful. All three make the assistant unusable.
+
+### The fix
+
+Separate what is announced from what is displayed.
+
+- The **visible message** updates as tokens arrive, but is **not** a live region.
+- A visually hidden **status region** with `role="status"` and `aria-live="polite"` announces short state changes: "Assistant is responding", "Response complete", "Response stopped", "Error: rate limited".
+- When the answer completes, announce "Response complete" and let the user navigate to the message to read it. Optionally, provide a setting to read the full answer automatically on completion.
+
+```tsx
+<div className="sr-only" role="status" aria-live="polite">
+  {status === 'streaming' && 'Assistant is responding'}
+  {status === 'done' && 'Response complete'}
+  {status === 'failed' && `Error: ${errorMessage}`}
+</div>
+```
+
+### Message structure
+
+- Wrap the message list in an element with `role="log"` and a label such as "Conversation".
+- Each message is an `article` with an accessible name, such as "You said" and "Assistant said".
+- Use real headings, lists, and tables in rendered markdown, so screen reader users can jump by heading inside long answers.
+- Citation chips need accessible names: "Source 2, Travel Policy 2025", not just "2".
+
+## Keyboard use
+
+Every action must work without a mouse.
+
+| Action | Keyboard |
+| --- | --- |
+| Send | Enter in the composer |
+| New line | Shift+Enter |
+| Stop generation | Escape while streaming, and the stop button is focusable |
+| Focus the composer | A shortcut such as `/`, announced in a help dialog |
+| Move between messages | Tab to message actions, or arrow keys inside the log |
+| Open a citation | Enter or Space on the chip |
+| Close the source panel | Escape, with focus returning to the chip that opened it |
+| Confirm or cancel a tool action | Tab to the buttons. Focus moves to the confirmation card when it appears |
+
+### Focus management
+
+- After sending, keep focus in the composer so the user can type the next message.
+- When a tool confirmation appears, move focus to it and announce it. It blocks progress, so the user must know it is there.
+- When a panel or dialog opens, trap focus inside it, and return focus to the trigger when it closes.
+- Never move focus to the streaming message. It would interrupt the user every time the answer updates.
+
+## Visual accessibility
+
+- **Contrast.** Text must reach 4.5 to 1 against its background. Muted gray text for metadata and citations often fails, so check it.
+- **Zoom.** The layout must work at 200% zoom and at 320 px wide without horizontal scrolling of the page. Code blocks and tables may scroll inside their own containers.
+- **Motion.** Typing animations and pulsing indicators must respect `prefers-reduced-motion`. Under reduced motion, show a static indicator.
+- **Not color alone.** Error, warning, and success states need an icon or text, not only a color.
+- **Focus visible.** Every interactive element shows a clear focus ring.
+
+## Internationalization
+
+An enterprise assistant serves global teams. There are two separate language questions.
+
+### UI language
+
+Translate all interface text: buttons, errors, empty states, and status messages. Standard practice applies:
+
+- Keep strings in message catalogs, not in components.
+- Use ICU message format for plurals and variables, such as "3 sources" versus "1 source".
+- Format dates, numbers, and file sizes with `Intl` APIs using the user's locale.
+- Leave room for longer text. German and Finnish strings can be 30 to 40 percent longer than English.
+
+### Answer language
+
+The model's answer language is a separate decision from the UI language. Reasonable defaults:
+
+- Answer in the language of the user's question.
+- If the sources are in a different language, still answer in the user's language, and keep quoted passages in the original.
+- Let users set a preferred answer language in settings, and pass it to the backend, which adds it to the prompt.
+
+Do not translate the model's answer in the frontend. The model handles this better, and the backend can log and evaluate it.
+
+### Right-to-left scripts
+
+Arabic, Hebrew, Persian, and Urdu are written right to left.
+
+- Set `dir="rtl"` on the document when the UI language is RTL, and use CSS logical properties (`margin-inline-start` instead of `margin-left`) so layouts mirror correctly.
+- Set `dir="auto"` on **each message**. A user with an English UI might ask in Arabic, and the answer should display right to left even though the page is left to right.
+- Code blocks always stay left to right, with `dir="ltr"`.
+- Mixed text, such as an Arabic sentence containing an English product name, is handled by the browser's bidirectional algorithm when `dir="auto"` is set. Test it with real examples.
+
+### Input methods
+
+Users of Chinese, Japanese, and Korean type through input method editors (IME). Pressing Enter confirms a character choice, not the message. If your composer sends on Enter without checking, these users send half-typed messages.
+
+```ts
+function onKeyDown(e: React.KeyboardEvent) {
+  if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+    e.preventDefault();
+    send();
+  }
+}
+```
+
+The `isComposing` check is one line and fixes the most common bug for East Asian users.
+
+## Testing
+
+- Run automated checks with axe in CI. They catch about a third of issues: missing labels, low contrast, invalid ARIA.
+- Test manually with at least one screen reader: VoiceOver on macOS, and NVDA on Windows.
+- Do a full keyboard-only pass of the main flows: send, stop, open citation, confirm a tool, give feedback.
+- Test with an RTL language and an IME before each major release.
+
+## Checklist
+
+- [ ] The streaming message is not a live region. A separate status region announces state changes.
+- [ ] All actions work by keyboard, and focus moves to tool confirmations.
+- [ ] Text contrast meets 4.5 to 1, including metadata and citations.
+- [ ] Animations respect reduced motion.
+- [ ] Each message has `dir="auto"`, and code stays left to right.
+- [ ] Enter does not send while an IME is composing.
+- [ ] Axe runs in CI, and screen reader tests run before releases.

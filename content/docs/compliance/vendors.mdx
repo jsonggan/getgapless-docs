@@ -1,0 +1,107 @@
+---
+title: Vendors and Contracts
+description: How to review model providers and other vendors, what contract terms to require for AI processing, how to manage subprocessors, and what commitments to make to customers.
+---
+
+An AI assistant depends on vendors that process your customers' most sensitive data: model providers, embedding and re-ranking services, vector databases, observability platforms, and cloud infrastructure. Each one is a subprocessor. Contracts with them, and the commitments you make to customers, must line up.
+
+## Vendor inventory
+
+| Vendor type | Data they see | Risk level |
+| --- | --- | --- |
+| Model providers (answers, agents) | Prompts: questions, retrieved documents, history | Highest |
+| Embedding and re-ranking providers | Document chunks, queries | High |
+| Guardrail and moderation services | User input, model output | High |
+| Vector database or search (if managed) | Chunks, embeddings, metadata | High |
+| Cloud infrastructure | Everything, encrypted | High, usually already reviewed |
+| Observability and error tracking | Traces, which may contain prompts | Medium to high, depending on configuration |
+| Identity broker | User identities, groups | Medium |
+| Email, notifications | Names, emails, limited content | Low to medium |
+
+## Reviewing a model provider
+
+Before adding a provider, or a new model or service from an existing provider, check:
+
+| Area | Questions |
+| --- | --- |
+| Training | Is customer data used to train or improve models? It must not be, contractually |
+| Retention | How long are prompts and outputs stored? Is zero data retention available, and for which endpoints and features? |
+| Abuse monitoring | Are prompts reviewed by humans for abuse? Can you get an exemption for sensitive workloads? |
+| Region | Where is data processed, stored, and monitored? Per model and endpoint |
+| Security | SOC 2 Type II, ISO 27001, penetration testing, vulnerability disclosure |
+| Subprocessors | Who else processes the data? |
+| Breach notification | Contractual time to notify you |
+| Sector terms | BAA for health data, other sector-specific terms |
+| Model lifecycle | Deprecation notice period, version pinning, change communication |
+| Availability | SLA, status page, support for capacity reservations |
+
+Features can change terms. A provider's zero retention commitment may not apply to every feature, for example some stateful or file-based features store data. Check each feature you use, and make the model gateway reject features that are not covered.
+
+## Contract terms to require
+
+With every vendor that processes customer data:
+
+- **Data processing agreement (DPA)** describing processing purposes, categories of data, security measures, subprocessors, and deletion at end of contract.
+- **Standard contractual clauses** or other transfer mechanisms for cross-border transfers where needed.
+- **No training** on your data or your customers' data.
+- **Retention limits**, ideally zero for prompts and outputs.
+- **Confidentiality** of all inputs and outputs.
+- **Breach notification** within a defined time, such as 48 or 72 hours.
+- **Audit rights** or acceptance of third-party audit reports.
+- **Subprocessor change notice**, so you can pass it on to your customers in time.
+
+## Subprocessor management
+
+Your customers' DPAs with you usually require that you list subprocessors and notify them before adding new ones, often with a right to object.
+
+- Maintain a public or customer-accessible **subprocessor list** with purpose and region for each.
+- Give **advance notice**, commonly 30 days, before adding a subprocessor.
+- Engineering cannot add a model provider by changing a config file. Adding a provider is a contractual event. Put a gate in the process: the model gateway's provider list changes only with sign-off from legal or privacy.
+
+| Subprocessor | Purpose | Data | Regions |
+| --- | --- | --- | --- |
+| Cloud provider | Hosting | All customer data | EU, US |
+| Model provider A | Answer generation, embeddings | Prompts, document chunks | EU, US |
+| Model provider B | Fallback generation | Prompts | EU, US |
+| Observability vendor | Tracing, logs | Metadata, redacted traces | EU, US |
+
+## Customer commitments
+
+What you promise customers must be true for every vendor in the chain.
+
+| Common commitment | Requires |
+| --- | --- |
+| "Your data is never used to train models" | No-training terms with every model provider, and no internal training on customer data without consent |
+| "Data stays in the EU" | Every vendor processing that tenant's data operating in the EU for that tenant. See [Data residency](/docs/compliance/data-residency) |
+| "Data is deleted within 30 days of request" | Deletion across all stores and vendors within 30 days, including vendor retention periods |
+| "Zero data retention at AI providers" | Zero retention terms and use of only covered features |
+| "We notify you of breaches within 72 hours" | Vendor notification to you well within that time |
+
+Keep a **commitments register**: each commitment, which contracts and controls support it, and an owner. Check it before every vendor change and before every unusual customer contract term.
+
+## Using customer data to improve the product
+
+Teams will want to use real conversations to improve prompts, build eval sets, or fine-tune models. This is one of the most sensitive areas in AI contracts.
+
+- Default: **no** use of customer content beyond providing the service.
+- If you want to use it: get explicit, written permission per customer, specify the purpose, de-identify, limit access, and respect deletion.
+- Aggregated, content-free metrics such as token counts, latency, and feedback rates are usually covered by standard service improvement terms. Confirm with legal.
+
+## Exit and portability
+
+Customers will ask what happens when they leave.
+
+- Export of their data in a usable format: conversations, uploads, settings, audit logs.
+- Deletion of all their data within a defined period, across all stores and vendors, with confirmation.
+- No lock-in through proprietary formats for their own content.
+
+## Checklist
+
+- [ ] Every vendor that sees customer data is listed with its data, purpose, and regions.
+- [ ] Model providers are reviewed for training, retention, abuse monitoring, region, and features.
+- [ ] DPAs with no-training, retention, breach notification, and subprocessor terms are in place.
+- [ ] Adding a model provider requires legal or privacy sign-off.
+- [ ] A subprocessor list is published, with advance notice of changes.
+- [ ] A commitments register maps customer promises to supporting contracts and controls.
+- [ ] Customer content is not used for product improvement without explicit permission.
+- [ ] Export and deletion on exit are supported and documented.

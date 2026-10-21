@@ -1,0 +1,85 @@
+---
+title: Compliance and Legal
+description: The compliance obligations an enterprise AI assistant typically faces, how engineering work maps to them, and how to prepare for customer security reviews and audits.
+---
+
+Enterprise customers and internal legal teams will ask hard questions before an AI assistant touches their data: where is it processed, who can see it, how long is it kept, which certifications do you hold, how do you meet AI regulation? This section explains what those obligations usually are and what engineering has to build to meet them.
+
+This is engineering guidance, not legal advice. Obligations depend on your jurisdiction, industry, customers, and contracts. Work with legal counsel to confirm what applies to you.
+
+## Why AI makes compliance harder
+
+| Factor | Effect |
+| --- | --- |
+| New data flows | Prompts go to model providers, often in other countries |
+| Copies everywhere | Indexes, embeddings, traces, caches, and eval sets all hold regulated data |
+| New regulation | AI-specific laws add obligations on top of privacy and security rules |
+| Opaque processing | Explaining how an answer was produced needs deliberate lineage |
+| Fast change | Models and providers change every few months, and each change can affect compliance |
+
+## The landscape
+
+| Area | Examples | What it asks for, broadly |
+| --- | --- | --- |
+| Security certifications | SOC 2, ISO/IEC 27001 | Documented, audited security controls |
+| AI management | ISO/IEC 42001 | A management system for AI: risk assessment, lifecycle controls, oversight |
+| Privacy law | GDPR, UK GDPR, CCPA/CPRA, and many national laws | Lawful basis, minimization, rights of access and erasure, transfers, processor contracts |
+| AI regulation | EU AI Act, plus emerging national and state laws | Risk classification, transparency, human oversight, documentation, obligations that grow with risk |
+| Sector rules | HIPAA (US health), financial services rules, public sector requirements | Specific controls for regulated data and decisions |
+| Employment law and works councils | Varies by country | Consultation before deploying tools that process employee data or could monitor employees |
+| Contracts | Customer agreements, DPAs, provider terms | Specific commitments: regions, retention, notification times, subprocessors |
+
+See [Frameworks](/docs/compliance/frameworks) for how each maps to engineering controls.
+
+## How engineering work maps to compliance
+
+Most of what auditors and customers ask for is already described elsewhere in these docs. Compliance is largely about doing it consistently and being able to show evidence.
+
+| They ask | You show | Built in |
+| --- | --- | --- |
+| Who can access customer data? | Access control design, role definitions, access reviews | [Access control](/docs/security/access-control) |
+| Where is data processed and stored? | Data flow diagram, region configuration per tenant | [Data residency](/docs/compliance/data-residency) |
+| How long is data kept, and can it be deleted? | Retention schedule, deletion job records | [Retention and deletion](/docs/data/retention) |
+| What happened, and who did it? | Audit logs | [Audit logging](/docs/compliance/audit-logging) |
+| Which third parties process the data? | Subprocessor list, DPAs, provider terms | [Vendors and contracts](/docs/compliance/vendors) |
+| How do you manage AI risk? | Risk tiers, impact assessments, evaluation reports | [Responsible AI](/docs/responsible-ai) |
+| How do you secure the system? | Threat model, pen test reports, vulnerability management | [Security](/docs/security) |
+| Is the data encrypted? | Encryption design, key management | [Data protection](/docs/security/data-protection) |
+
+## Customer security reviews
+
+Every enterprise sale includes a security questionnaire, often hundreds of questions, with a growing AI section. Prepare a reusable package:
+
+- **Trust documentation**: an overview of architecture, data flows, security controls, and AI practices.
+- **Certifications**: SOC 2 report, ISO certificates.
+- **Pen test summary**: recent external test, with findings and remediation status.
+- **Subprocessor list**: including every model provider and the regions they process in.
+- **DPA template**: your data processing agreement.
+- **AI-specific answers**: does any model train on customer data, which providers and regions, retention at providers, how permissions are enforced in retrieval, how prompt injection is handled, what human oversight exists.
+
+Keep answers in a maintained library, owned by a named person, and update them when the architecture changes. A wrong answer in a questionnaire can become a contractual commitment.
+
+## Evidence collection
+
+Audits ask for proof over time, not descriptions. Automate evidence where you can:
+
+| Control | Evidence |
+| --- | --- |
+| Code changes are reviewed | Pull request history with approvals |
+| Access is reviewed | Quarterly access review records |
+| Vulnerabilities are patched | Scanner results and fix timelines |
+| Backups are tested | Restore test records with dates and results |
+| AI changes are evaluated | CI eval reports attached to pull requests |
+| Incidents are handled | Incident records and post-incident reviews |
+| Data is deleted on request | Deletion job records |
+
+Compliance automation platforms can pull much of this from your tools. Even without one, store evidence in a predictable place as you go. Reconstructing a year of evidence the week before an audit is painful.
+
+## Pages in this section
+
+| Page | Covers |
+| --- | --- |
+| [Frameworks](/docs/compliance/frameworks) | SOC 2, ISO 27001, ISO 42001, GDPR, EU AI Act, HIPAA, and what each means for this system |
+| [Data residency](/docs/compliance/data-residency) | Keeping data and processing in required regions, including model calls |
+| [Audit logging](/docs/compliance/audit-logging) | What to log, how to protect it, and how to make it useful |
+| [Vendors and contracts](/docs/compliance/vendors) | Model provider terms, DPAs, subprocessors, and customer commitments |
