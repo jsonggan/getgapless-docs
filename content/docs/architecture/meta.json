@@ -1,4 +1,4 @@
 {
   "title": "Overview and Architecture",
-  "pages": ["request-lifecycle", "sync-async", "multi-tenancy", "decisions", "glossary"]
+  "pages": ["how-fdes-and-ai-engineers-work", "request-lifecycle", "sync-async", "multi-tenancy", "decisions", "glossary"]
 }
