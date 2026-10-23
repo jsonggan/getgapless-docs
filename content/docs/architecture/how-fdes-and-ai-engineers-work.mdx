@@ -1,0 +1,207 @@
+---
+title: How FDEs and AI Engineers Work
+description: What forward deployed engineers and AI engineers do, how a project moves from idea to production, and the hard and soft skills the work needs.
+---
+
+Before going deep into components, it helps to know how the people who build AI systems actually work. This page describes two roles, forward deployed engineer (FDE) and AI engineer, the way a project moves from a vague idea to a system in production, and the skills each step needs.
+
+The guidance here is drawn from material published by frontier AI labs, mainly OpenAI and Anthropic. Links are at the end of the page.
+
+## Two roles
+
+### AI engineer
+
+An AI engineer builds products and systems on top of existing models. They do not train foundation models. They take a model that is already served through an API, and they turn it into a reliable application: prompts, retrieval, tools, evaluation, guardrails, and the software around it.
+
+A useful way to separate this from ML engineering: the ML engineer's job ends when a model is served for inference, and the AI engineer's job starts there. The line is blurry, and many people do both.
+
+### Forward deployed engineer
+
+A forward deployed engineer is an AI engineer who works embedded with a customer. OpenAI and Anthropic both hire for this role. Anthropic often uses the title Applied AI Engineer for the same work.
+
+An FDE's job is not to make the AI better. The labs' research teams do that. An FDE sits with the people in a company, learns how they work and how they use AI today, and compares that with what current models can actually do. The job is to close the gap between the two: find where AI can help, build it, and make sure people adopt it.
+
+That means an FDE has to understand the business, not just the technology. One month the customer is a bank, the next a hospital, a logistics company, or a law firm. Each has its own language, workflows, rules, and ways of measuring success. An FDE has to go in, learn the domain quickly, and understand why the work is done the way it is before proposing to change it.
+
+Day to day, an FDE:
+
+- Works directly with a customer's team, often on site, to find where AI can solve a real business problem.
+- Learns the customer's domain and business context well enough to tell a useful idea from an impressive demo.
+- Owns delivery from the first prototype to a stable system in production.
+- Builds evaluations and tests model performance before scaling up.
+- Turns patterns that repeat across customers into reusable tools, playbooks, or building blocks.
+- Feeds what they learn in the field back to the lab's research and product teams.
+
+FDEs work with a lot of ambiguity. What a customer describes during scoping often does not match the reality of their data and systems. That gap is the core of the job.
+
+### How the roles compare
+
+| | ML engineer | AI engineer | Forward deployed engineer |
+| --- | --- | --- | --- |
+| Main output | Trained and served models | AI features and systems built on models | A working AI system inside one customer's business |
+| Starting point | Data and a training objective | A model API and a product need | A customer's problem, data, and constraints |
+| Works with | Data scientists, researchers | Product, design, backend engineers | Customer engineers, business owners, security and compliance teams |
+| Measures success by | Model metrics, such as accuracy or loss | Product quality, latency, and cost | Business outcome for the customer |
+| Typical risk | Model does not generalize | Feature works in a demo but fails on real traffic | Solution does not fit the customer's real systems or data |
+
+If you come from data, software, or ML, you already have part of this skill set. The rest of this page shows which parts matter most.
+
+## How a project moves from idea to production
+
+The steps below are the same whether you are an AI engineer on a product team or an FDE at a customer. An FDE spends more time on the first three steps. An AI engineer on a product team spends more time on the last three.
+
+### 1. Find a problem worth solving
+
+Start from a business problem, not from the technology. Most use cases fall into six patterns:
+
+| Pattern | Example |
+| --- | --- |
+| Content creation | Draft product descriptions or marketing copy |
+| Research | Find and summarise information across many documents |
+| Coding | Generate, review, or explain code |
+| Data analysis | Answer questions over tables and reports |
+| Ideation and strategy | Brainstorm options and critique a plan |
+| Automation | Run repetitive multi-step tasks |
+
+Good first projects are frequent, painful, and easy to check. A task that people do a hundred times a week, that costs them real time, and where a human can quickly tell if the output is right, is a strong candidate.
+
+### 2. Know what kind of value you are after
+
+Value is not only time saved. Some value shows up right away. Some comes later, through the workflows and capabilities the first project makes possible. OpenAI groups it into six forms. The examples below come from a logistics dispatch team:
+
+| Form of value | What it means | Example |
+| --- | --- | --- |
+| Time and capacity | People spend less time on low-value work | Less status chasing and rework, so dispatchers get time back. Measure the task that changes. |
+| Output and service | The team delivers more, or delivers better | More complete shipments on planned trucks and fewer recovery trips, once blockers are cleared. |
+| Quality and risk | Decisions are better and mistakes are fewer | Decisions backed by evidence, with fewer missing facts. Track quality, not just speed. |
+| Reusable foundation | The project leaves behind assets others can build on | Trusted scans, aligned shipment IDs, and reusable tools make later AI workflows possible. |
+| Structural change | The way work is organised improves | Ad hoc calls are replaced by shared evidence, clear owners, and repeatable decisions. |
+| Learning and option value | The organisation learns what to do next | Each handled exception leaves a verified history. Track which next workflow actually reuses it. |
+
+Naming the form of value early tells you what to measure. A project that saves little time can still be worth it if it builds a foundation that the next three projects reuse.
+
+### 3. Understand the business and the real constraints
+
+Before building, learn the domain and find out what is actually true on the ground:
+
+- **Business context.** How does the team make money or deliver its service? Which decisions matter most, and what does a mistake cost?
+- **Domain knowledge.** What terms, rules, and edge cases does an expert in this field know? Sit with the people who do the work.
+- **Data.** Where does it live, who owns it, how clean is it, and who is allowed to see what?
+- **Systems.** Which systems must the solution read from or write to? What APIs exist?
+- **Rules.** Which security, privacy, and compliance requirements apply? Can data leave the region or the company's cloud?
+- **People.** Who uses the output, who approves it, and who maintains the system after launch?
+
+This is where scoping meets reality. Many projects fail here because nobody checked the data, the permissions, or how the work is really done until late.
+
+### 4. Define success before you build
+
+Define success criteria first, then build test cases, and only then write the first prompt.
+
+Good success criteria are specific and measurable. "The answers should be good" is not a criterion. "At least 90% of answers on our test set cite a correct source document" is. Decide up front on:
+
+- **Quality**: accuracy, groundedness, or task completion rate on a test set.
+- **Latency**: how long a user is willing to wait.
+- **Cost**: the maximum cost per request or per month.
+- **Safety**: for example, the rate of harmful or off-policy outputs.
+
+### 5. Build the simplest thing that could work
+
+Find the simplest solution possible, and only add complexity when it is needed. Sometimes that means not building an agent at all. Teams that succeed tend to use simple, composable patterns rather than complex frameworks.
+
+A useful order to try things in:
+
+1. A single model call with a good prompt.
+2. A single call with retrieval, so the model can use your data.
+3. A fixed workflow: several model calls chained through steps you define in code.
+4. An agent: the model decides which tools to call and in what order.
+
+In a **workflow**, code controls the steps. In an **agent**, the model directs its own process. Workflows are more predictable. Agents are more flexible but cost more and are harder to test. Agents fit best when decisions are complex, rules are hard to maintain, or the work depends on unstructured data. Otherwise, a deterministic solution may be enough.
+
+### 6. Iterate with evaluations
+
+Run your test set after every change to a prompt, model, retrieval setting, or tool. A change that looks better on three examples can be worse on three hundred.
+
+- Build test sets that look like real traffic, including edge cases.
+- Automate grading where you can, for example with code checks or a model acting as a grader.
+- Check automated grades against human judgement from time to time.
+- Log real requests in development and production, and turn interesting ones into new test cases.
+
+### 7. Make it safe and reliable for production
+
+A prototype becomes a product when it can handle real users, real data, and failures. This is where most of the engineering effort goes:
+
+- **Guardrails.** Layer checks that keep inputs and outputs relevant and safe, and limit what tools can do, for example with rate limits, allowlists, and approval steps.
+- **Human in the loop.** Hand over to a person when the system fails repeatedly or when an action is high-risk or cannot be undone.
+- **Permissions.** Make sure the system only reads data the current user is allowed to see.
+- **Reliability.** Handle timeouts, retries, provider outages, and rate limits.
+- **Observability.** Trace every request so you can explain any answer.
+
+The rest of these docs cover each of these in depth.
+
+### 8. Deploy, monitor, and feed back
+
+After launch, the work continues. Watch quality, latency, cost, and user feedback. Turn failures into new test cases. Check the value you named in step 2 is actually showing up. For an FDE, this step also means handing the system over to the customer's team, writing down what worked, and sharing reusable patterns with the rest of the company.
+
+## Hard skills
+
+You do not need all of these on day one. The first group is the foundation. The others grow with experience.
+
+### Software engineering
+
+- Build and ship working software, with or without AI coding tools.
+- Design and call APIs, including streaming responses.
+- Work with databases, queues, and background jobs.
+- Deploy to a cloud platform.
+
+### Working with models
+
+- Know what current models can and cannot do, and how capabilities differ between model families and sizes.
+- Write clear prompts: instructions, examples, output formats, and structured output.
+- Use tool calling and understand how agents choose tools.
+- Manage context: give the model the smallest set of high-signal information it needs. More context is not always better. Long, noisy context can make answers worse.
+- Understand tokens, context windows, latency, and pricing, and how they trade off.
+
+### Retrieval and data
+
+- Build retrieval-augmented generation (RAG): parsing, chunking, embeddings, vector and keyword search, and reranking.
+- Know when retrieval is the wrong tool, for example when the answer is in a database and a SQL query is more accurate.
+- Handle data quality, data freshness, and access permissions.
+
+### Evaluation
+
+- Turn vague goals into measurable criteria.
+- Build and maintain test sets.
+- Use code-based checks, model-based grading, and human review, and know when each fits.
+- Read results critically: look at failures, not only averages.
+
+### Production and safety
+
+- Add guardrails for prompt injection, data leaks, and harmful output.
+- Design approval steps for actions that write, send, or delete.
+- Add tracing, logging, and cost tracking.
+- Understand the basics of security, privacy, and compliance that apply to your industry.
+
+## Soft skills
+
+For forward deployed engineers especially, soft skills decide whether a technically good system gets used.
+
+- **Learning a new domain fast.** Pick up the language, rules, and workflows of an unfamiliar industry quickly. Ask experts how they decide, not only what they do.
+- **Problem discovery.** Ask questions until you understand the real problem, not just the request. Customers often ask for a chatbot when what they need is a faster search or one automated report.
+- **Comfort with ambiguity.** Requirements are unclear, data is messy, and the first plan is usually wrong. Make progress anyway, and adjust as you learn.
+- **Translating between business and technology.** Explain what AI can and cannot do in plain language. Turn business goals into technical requirements, and technical trade-offs into business terms.
+- **Managing expectations.** Be honest about accuracy, cost, and timelines. A demo that works once is not a product. Say so early.
+- **Stakeholder management.** Work with security, legal, compliance, and IT teams early. They can block a launch late if they are surprised.
+- **Ownership.** Own the outcome, not just the code. Stay accountable after launch.
+- **Pragmatism.** Ship a solution that works now, and be clear about the technical debt you are taking on.
+- **Writing.** Write clear design docs, prompts, and handover notes. Clear writers tend to write clear prompts.
+- **Judgement about AI output.** Four skills apply to working with AI: **delegation** (deciding what to give to AI and what to keep), **description** (explaining the task clearly), **discernment** (critically checking what the AI produces), and **diligence** (taking responsibility for how AI is used).
+- **Keeping up.** Models and tools change every few months. Keep testing what new models can do instead of relying on what was true last year.
+
+## Further reading
+
+- Anthropic: [Building effective agents](https://www.anthropic.com/research/building-effective-agents)
+- Anthropic: [Effective context engineering for AI agents](https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents)
+- Anthropic: [Define your success criteria](https://docs.anthropic.com/en/docs/test-and-evaluate) and [Create strong empirical evaluations](https://docs.anthropic.com/en/docs/test-and-evaluate/develop-tests)
+- OpenAI: [A practical guide to building agents](https://openai.com/business/guides-and-resources/a-practical-guide-to-building-ai-agents/)
+- OpenAI: [Identifying and scaling AI use cases](https://cdn.openai.com/business-guides-and-resources/identifying-and-scaling-ai-use-cases.pdf)
+- OpenAI: [Evaluation best practices](https://developers.openai.com/api/docs/guides/evaluation-best-practices)
