@@ -3,13 +3,13 @@ title: Key Decisions
 description: The major technology choices in an enterprise AI system, the options for each, and how to choose, plus a template for recording decisions.
 ---
 
-Some decisions are cheap to change later, such as a UI library. Others shape everything that follows, such as where your data lives or whether you depend on one model provider. This page covers the expensive ones. For each, it lists the options, what each costs, and a default that works for most teams.
+Some decisions are cheap to change later, such as a UI library. Others shape everything that follows, such as where your data lives or whether you depend on one model provider. This page covers the expensive ones. For each, it lists the options and what each costs.
 
 Record each decision you make as an **architecture decision record (ADR)**. A template is at the end of this page.
 
-## 1. Hosted models vs self-hosted models
+## 1. Hosted vs self-hosted models
 
-| | Hosted API (OpenAI, Anthropic, Google, Azure, Bedrock) | Self-hosted open-weight models (Llama, Mistral, Qwen on vLLM or TGI) |
+| | Hosted models (OpenAI, Anthropic, Google, Azure, Bedrock) | Self-hosted models (open-weight Llama, Mistral, Qwen on vLLM or TGI) |
 | --- | --- | --- |
 | Quality | Best available frontier models | Good, usually a step behind the frontier |
 | Setup time | Minutes | Weeks: GPUs, serving stack, scaling, monitoring |
@@ -20,7 +20,7 @@ Record each decision you make as an **architecture decision record (ADR)**. A te
 
 **Default:** start with hosted models through a cloud provider your company already has a contract with. The enterprise terms, regional hosting, and existing security review remove most objections. Revisit self-hosting when one of these is true: a customer contract requires it, a single workload is large and steady enough to keep GPUs busy, or you need a fine-tuned small model for one narrow task.
 
-Either way, put a **model gateway** in front of all models. It is what makes this decision reversible.
+Either way, put a **model gateway** in front of all models: one internal component that every model call goes through, so feature code never depends on a specific provider. It is what makes this decision reversible. See [Model gateway](/docs/ai-model/model-selection#model-gateway).
 
 ## 2. One provider vs several
 
@@ -39,9 +39,11 @@ Frameworks like LangChain, LlamaIndex, Semantic Kernel, and agent SDKs from mode
 | Debugging production issues | Harder, you debug the framework too | Easier |
 | Upgrades | Frequent breaking changes in fast-moving libraries | You control the pace |
 
-**Default:** use a provider's official SDK for API calls, and write the orchestration yourself. The core loop of retrieve, build prompt, call model, and call tools is a few hundred lines. Owning it means you always know exactly what was sent to the model. Use frameworks for pieces that are genuinely hard, such as document parsers, and keep them behind your own interfaces.
+**How to choose:** a framework fits when speed to a first demo matters most. Own code fits when you need to see the exact prompt and debug production issues without digging through abstractions.
 
 ## 4. Vector store
+
+The vector store holds the embedded **chunks** (document fragments) that RAG searches. See [RAG ingestion](/docs/ai-model/rag-ingestion).
 
 | Option | Good for | Watch out for |
 | --- | --- | --- |
@@ -50,7 +52,7 @@ Frameworks like LangChain, LlamaIndex, Semantic Kernel, and agent SDKs from mode
 | **Dedicated vector database** (Pinecone, Weaviate, Qdrant, Milvus) | Large scale, managed options, built-in namespaces per tenant | Another system and vendor. Keyword search quality varies |
 | **Cloud AI search** (Azure AI Search, Vertex AI Search) | Managed hybrid search with connectors | Less control over ranking. Vendor lock-in |
 
-**Default:** Postgres with pgvector plus Postgres full-text search, on a dedicated instance, until you pass about 10 million chunks or need features it lacks. It keeps your stack small, and ACL filters are ordinary SQL. Move to OpenSearch or a dedicated store when scale or hybrid ranking quality demands it. Keep retrieval behind a service interface so the move does not touch the orchestrator.
+**How to choose:** start from what your team already runs, then check scale, hybrid search needs, and how much operational weight you can carry.
 
 ## 5. RAG vs fine-tuning vs long context
 
@@ -62,15 +64,25 @@ These solve different problems. Teams often reach for fine-tuning when they need
 | Answer about one long document the user provides | **Long context** | Put the whole document in the prompt if it fits |
 | Consistent output format or tone | **Prompting first**, then fine-tuning | Good examples in the prompt usually suffice |
 | A narrow, high-volume task where a big model is too slow or costly | **Fine-tune a small model** | A small model trained on good examples can match a large one on one task |
-| Teach the model new facts | **Not fine-tuning** | Fine-tuning is unreliable for facts and cannot be updated or permission-filtered |
 
 **Default:** RAG for knowledge, long context for user-supplied documents, prompting for behavior. Fine-tune only with an evaluation set that proves it beats prompting.
 
 ## 6. Monolith vs services
 
-AI teams sometimes split into many microservices early: one for embeddings, one for chat, one for retrieval, one for guardrails. Each split adds a network hop, a deploy, and a failure mode.
+Each service split adds a network hop, a deploy, and a failure mode. Staying in one application too long means teams block each other and one bad component can take everything down. Weigh these factors:
 
-**Default:** one backend application with clear internal modules, plus separate workers for background jobs. Split a module into a service only when it has a different scaling profile (GPU inference), a different team, or a different security boundary (tool execution with powerful credentials).
+| Factor | Points toward a monolith | Points toward services |
+| --- | --- | --- |
+| **Team size** | One small team, ~1-5 engineers, who all work across the codebase | Several teams that need to ship on their own schedules without coordinating every release |
+| **User size and load** | Hundreds to a few thousand users. One application with a few replicas handles the load | Large user base, or traffic spikes that hit one component much harder than the others |
+| **Scaling profile** | All parts use similar CPU and memory | One part needs GPUs or much more memory, such as model inference or embedding jobs |
+| **Security boundary** | All code needs the same access | One part holds powerful credentials, such as tool execution, and must be isolated |
+| **Failure isolation** | An outage in one part can take down the whole app, and that is acceptable | A failing component, such as a slow provider, must not affect the others |
+| **Operational maturity** | No dedicated platform team. Limited CI/CD, tracing, and on-call | Mature CI/CD, distributed tracing, service discovery, and on-call for each service |
+| **Latency budget** | Each user request makes many internal calls, and network hops would add up | Internal calls are few, or async through queues |
+| **Technology needs** | One language and runtime works for everything | One part needs a different stack, such as Python for ML next to a TypeScript or Go API |
+
+A common middle ground is a **modular monolith**: one deployable application with strict internal module boundaries, plus separate workers for background jobs. Clean module boundaries make it cheaper to extract a service later, when one of the factors above clearly calls for it.
 
 ## 7. Where prompts live
 
@@ -83,7 +95,7 @@ AI teams sometimes split into many microservices early: one for embeddings, one 
 
 ## Decision record template
 
-Write one record per decision. Keep it short. Store records in the repo, for example `docs/adr/0007-vector-store.md`, and never delete them. If a decision changes, write a new record that supersedes the old one.
+Write one short record per decision. Keep every record in one place, such as `docs/adr/0007-vector-store.md` in the repo or a documentation tool like Confluence or Notion. Never delete records. If a decision changes, write a new record that supersedes the old one.
 
 ```markdown
 # ADR 0007: Use Postgres with pgvector as the vector store
