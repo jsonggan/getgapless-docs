@@ -52,7 +52,7 @@ As recommended in [Key decisions](/docs/architecture/decisions), most logic live
 
 | Store | Holds | Notes |
 | --- | --- | --- |
-| Postgres | Tenants, users, conversations, messages, sources used, feedback, jobs, settings, audit events | Use row-level security by tenant. See [Multi-tenancy](/docs/architecture/multi-tenancy) |
+| Postgres | Tenants, users, conversations, messages, sources used, feedback, jobs, settings, audit events | Use row-level security by tenant |
 | Redis | Rate limit counters, short-lived caches, stream replay buffers, locks | Everything here can be lost without data loss |
 | Object storage | Uploaded files, parsed text, exports | Prefix by tenant. Encrypt at rest. Lifecycle rules for deletion |
 | Search index | Chunks, embeddings, metadata, ACLs | Rebuildable from source documents and object storage |
