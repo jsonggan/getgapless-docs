@@ -6,6 +6,10 @@ html {
   scrollbar-gutter: stable;
 }
 
+#nd-sidebar {
+  width: var(--fd-sidebar-width);
+}
+
 html > body[data-scroll-locked] {
   margin-right: 0px !important;
   --removed-body-scroll-bar-size: 0px !important;
