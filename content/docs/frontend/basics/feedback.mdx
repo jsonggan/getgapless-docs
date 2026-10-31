@@ -1,0 +1,50 @@
+---
+title: Feedback and states
+description: Why every action needs a visible response, and the states every screen must be designed for.
+---
+
+The most common reason an interface feels broken is silence. The user clicks, nothing visibly changes, and they click again or give up.
+
+## Every action gets a response
+
+People judge speed by what they see, not by what the system is doing. These response times are a long-standing rule of thumb:
+
+| Wait | How it feels | What to show |
+| --- | --- | --- |
+| Under 0.1 seconds | Instant | Nothing extra. The result is the feedback |
+| Up to 1 second | A short pause, but the user stays focused | A subtle change, such as a pressed button or a small spinner |
+| Up to 10 seconds | The user starts to wonder | Clear progress, and a way to cancel |
+| Over 10 seconds | The user's attention drifts | Progress with detail, and let them do something else meanwhile |
+
+AI responses often take several seconds. That is why most AI products show the answer word by word as it is written, instead of making the user stare at a spinner. See [Streaming](/docs/frontend/streaming).
+
+## Every screen has more than one state
+
+Designs often show only the ideal case: the screen full of perfect data. Real screens spend much of their time in other states, and each one needs a design.
+
+| State | When it happens | What to show |
+| --- | --- | --- |
+| Empty | First visit, or nothing has been created yet | What belongs here and how to start, such as a few example questions to ask |
+| Loading | Waiting for data or a response | A placeholder in the shape of the content, or visible progress. Never a frozen screen |
+| Partial | Some content has arrived, some has not | What you already have, with the rest clearly still coming |
+| Error | Something failed | What happened in plain words, and what to do next |
+| Success | The action worked | A quiet confirmation, such as a short message that fades |
+
+An empty screen is a first impression. It is often the first thing a new user sees, so it deserves as much care as the full one. For the failures specific to AI products, see [Error and empty states](/docs/frontend/error-states).
+
+## Writing error messages
+
+- **Say what happened, in the user's words.** "We could not reach the server" instead of "Error 503".
+- **Do not blame the user.** "That file type is not supported" instead of "You uploaded an invalid file".
+- **Say what to do next.** Try again, wait a minute, or contact support.
+- **Keep the user's work.** If a message fails to send, the text they typed must still be there.
+
+## Perceived speed
+
+How fast something feels matters more than how fast it is. Showing something useful right away makes the wait feel shorter:
+
+- Show the user's own action at once, such as their message appearing in the chat before the server replies.
+- Show placeholders in the shape of the coming content instead of a blank page.
+- Show the first part of a result as soon as it exists.
+
+See [Performance](/docs/frontend/performance) for how this applies to AI responses.
