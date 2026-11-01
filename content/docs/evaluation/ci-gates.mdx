@@ -3,6 +3,8 @@ title: CI Gates
 description: How to run evaluations automatically on every change, set thresholds that block regressions without blocking progress, and keep eval runs fast and affordable.
 ---
 
+import { EvalNoiseDemo } from "@/components/demos/ci-gates";
+
 An evaluation that someone has to remember to run will not be run before the change that breaks production. CI gates run evals automatically and block merges or deploys that regress quality or safety.
 
 ## What triggers which eval
@@ -74,6 +76,8 @@ operational:
 Eval scores vary between runs because models are not deterministic, even at temperature 0. If you set `max_drop` smaller than the natural variation, the gate fails randomly and people learn to ignore it.
 
 Measure noise: run the same version on the golden set five times and look at the spread. Set regression limits above that spread. For decisions close to the line, run the eval two or three times and average.
+
+<EvalNoiseDemo />
 
 ### Flipped cases
 
