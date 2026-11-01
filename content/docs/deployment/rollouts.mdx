@@ -3,6 +3,8 @@ title: Rollouts
 description: How to release prompt, model, retrieval, and guardrail changes gradually, compare them against the current version in production, and roll back quickly when quality drops.
 ---
 
+import { RolloutAssignmentDemo } from "@/components/demos/rollouts";
+
 Code deploys and behavior changes need different release strategies. A code deploy is usually all or nothing, protected by tests. A behavior change, such as a new prompt or model, is better released gradually: its effect on real questions is only fully visible in production, and some quality signals take hours to show.
 
 ## What gets a behavior rollout
@@ -30,6 +32,8 @@ function variantFor(ctx: RequestContext, rollout: Rollout): string {
 ```
 
 Include the rollout ID in the hash, so different rollouts get independent buckets and the same users are not always the canaries.
+
+<RolloutAssignmentDemo />
 
 Record the variant on every generation (prompt version and model are already stored), so every metric can be split by variant.
 
