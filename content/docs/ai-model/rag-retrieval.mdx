@@ -3,6 +3,8 @@ title: RAG Retrieval
 description: How the system finds the right chunks for a question, using query rewriting, hybrid search, permission filters, re-ranking, and context assembly, and how to debug retrieval failures.
 ---
 
+import { HybridSearchDemo } from "@/components/demos/rag";
+
 Retrieval decides what the model reads. If the right passage is not retrieved, no prompt and no model can produce the right answer. This page covers each step of retrieval and the settings that matter.
 
 ## The design
@@ -60,6 +62,8 @@ score(chunk) = sum over each result list of  1 / (k + rank_in_that_list)
 ```
 
 A chunk ranked 1st in keyword search and 5th in vector search scores `1/61 + 1/65`. A chunk found by only one search scores just one term. RRF is simple, needs no tuning to start, and works well.
+
+<HybridSearchDemo />
 
 ### Permission filtering
 

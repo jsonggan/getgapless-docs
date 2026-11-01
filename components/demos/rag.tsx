@@ -208,3 +208,118 @@ function HeaderCard() {
     </div>
   );
 }
+
+const query = "VPN error 809 when working from home";
+
+const results: Record<string, { title: string; note: string }> = {
+  A: { title: "Fix VPN error 809", note: "The answer" },
+  B: { title: "VPN from home: setup", note: "Related guide" },
+  C: { title: "Remote work policy", note: "Mentions working from home" },
+  D: { title: "Expense app error codes", note: "Has 809, wrong product" },
+  E: { title: "Slow Wi-Fi at home", note: "Similar topic, no VPN" },
+  F: { title: "VPN release notes", note: "Mentions VPN errors" },
+};
+
+const keywordRanks = ["A", "D", "B", "C", "F"];
+const vectorRanks = ["B", "A", "C", "E", "F"];
+const k = 60;
+
+const fused = Object.keys(results)
+  .map((id) => {
+    const terms = [keywordRanks, vectorRanks]
+      .map((list) => list.indexOf(id) + 1)
+      .filter((rank) => rank > 0)
+      .map((rank) => ({ rank, value: 1 / (k + rank) }));
+    return { id, terms, score: terms.reduce((sum, term) => sum + term.value, 0) };
+  })
+  .sort((a, b) => b.score - a.score);
+
+export function HybridSearchDemo() {
+  return (
+    <Scene
+      title="Hybrid search with RRF"
+      steps={[
+        {
+          label: "Keyword",
+          duration: 4200,
+          caption: "Keyword search finds the exact code 809, but also ranks an expense app page second just because it contains the same number.",
+        },
+        {
+          label: "Vector",
+          duration: 4200,
+          caption: "Vector search matches the meaning of \"VPN from home\", but the code 809 means little to it. It ranks the setup guide first and lets in a Wi-Fi page.",
+        },
+        {
+          label: "Fused",
+          duration: 5600,
+          caption:
+            "RRF adds 1 / (60 + rank) from each list. Pages both searches agree on rise to the top. Pages only one search liked, such as the expense codes, drop.",
+        },
+      ]}
+    >
+      {(scene) => <HybridStage {...scene} />}
+    </Scene>
+  );
+}
+
+function HybridStage({ step, run }: SceneState) {
+  const shown = useCount(run, step === 2 ? fused.length : 5, 1500, 300);
+
+  return (
+    <div className="space-y-3 text-sm">
+      <p className="rounded-md bg-fd-muted/50 px-3 py-2">
+        <span className="text-fd-muted-foreground">Query: </span>
+        {query}
+      </p>
+      <div className="grid gap-3 md:grid-cols-3">
+        <RankList title="Keyword (BM25)" ids={keywordRanks} active={step === 0} count={step === 0 ? shown : 5} dim={step > 0} />
+        <RankList
+          title="Vector"
+          ids={vectorRanks}
+          active={step === 1}
+          count={step === 1 ? shown : step > 1 ? 5 : 0}
+          dim={step > 1}
+        />
+        <div className="min-w-0 rounded-lg border bg-fd-background p-2.5">
+          <p className="mb-2 text-xs font-medium text-fd-muted-foreground">Fused (RRF, k = 60)</p>
+          <div className="space-y-1.5">
+            {step === 2 &&
+              fused.slice(0, shown).map((item, index) => (
+                <motion.div
+                  key={item.id}
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  className={cn("rounded-md px-2 py-1", item.terms.length === 2 ? "bg-fd-success/10" : "bg-fd-muted")}
+                >
+                  <p className="truncate text-xs">
+                    {index + 1}. {results[item.id].title}
+                  </p>
+                  <p className="font-mono text-[10px] text-fd-muted-foreground">
+                    {item.terms.map((term) => `1/${k + term.rank}`).join(" + ")} = {item.score.toFixed(4)}
+                  </p>
+                </motion.div>
+              ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function RankList({ title, ids, active, count, dim }: { title: string; ids: string[]; active: boolean; count: number; dim: boolean }) {
+  return (
+    <div className={cn("min-w-0 rounded-lg border bg-fd-background p-2.5 transition-opacity", dim && "opacity-60", active && "border-fd-primary")}>
+      <p className="mb-2 text-xs font-medium text-fd-muted-foreground">{title}</p>
+      <div className="space-y-1.5">
+        {ids.slice(0, count).map((id, index) => (
+          <motion.div key={id} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} className="rounded-md bg-fd-muted/60 px-2 py-1">
+            <p className="truncate text-xs">
+              {index + 1}. {results[id].title}
+            </p>
+            <p className={cn("text-[10px]", id === "D" || id === "E" ? "text-fd-error" : "text-fd-muted-foreground")}>{results[id].note}</p>
+          </motion.div>
+        ))}
+      </div>
+    </div>
+  );
+}
