@@ -3,6 +3,8 @@ title: Access Control
 description: How tenant isolation and document permissions are enforced at every layer of the assistant, the common ways they break, and how to test that they hold.
 ---
 
+import { PermissionFilterDemo } from "@/components/demos/access-control";
+
 The assistant's most important security property: **a user never receives information from a document they cannot open in the source system, and never receives another tenant's data.** This page shows where that property is enforced and how it fails.
 
 Mechanics are covered elsewhere: identity and roles in [Authentication and authorization](/docs/backend/auth), and permission copying in [Sources and connectors](/docs/data/sources-connectors). This page ties them together from a security point of view.
@@ -40,6 +42,8 @@ It is tempting to retrieve broadly and instruct the model: "Do not reveal inform
 - Retrieved text influences the answer even when not quoted directly.
 
 **Rule: if content reaches the prompt, assume the user will see it.** Permission enforcement happens before retrieval returns results, never after.
+
+<PermissionFilterDemo />
 
 ## Common ways it breaks
 
