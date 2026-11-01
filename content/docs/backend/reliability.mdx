@@ -3,6 +3,8 @@ title: Reliability
 description: How to keep the assistant working when model providers, search, and other dependencies are slow or failing, using timeouts, retries, fallbacks, circuit breakers, and cancellation.
 ---
 
+import { CircuitBreakerDemo, RetryStormDemo } from "@/components/demos/reliability";
+
 An AI request depends on more external systems than a typical web request: one or more model providers, an embedding service, a search index, a re-ranker, guardrail models, and the APIs behind tools. Each one fails sometimes. With six dependencies at 99.9% availability each, the chain is down for about 9 hours a year unless you design for failure.
 
 ## Failure modes to expect
@@ -68,6 +70,8 @@ async function withRetry<T>(fn: () => Promise<T>, { attempts = 2, base = 300 } =
 
 **Avoid retry storms.** If every layer retries three times, one failure at the bottom becomes 27 calls. Retry at one layer only, usually the one closest to the failing dependency. The model gateway retries model calls. The orchestrator does not retry the model gateway.
 
+<RetryStormDemo />
+
 ## Fallbacks
 
 A fallback is a different way to get a useful result when the primary way fails.
@@ -102,6 +106,8 @@ stateDiagram-v2
 - **Closed**: calls go through. Track the error rate over a sliding window.
 - **Open**: calls fail immediately or go straight to the fallback. No waiting for timeouts.
 - **Half-open**: after a cool-down, such as 30 seconds, let a few requests through to test recovery.
+
+<CircuitBreakerDemo />
 
 Put circuit breakers in the model gateway per provider and region, and in the tool service per target system.
 
