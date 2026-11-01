@@ -3,6 +3,8 @@ title: API Design
 description: The resources and endpoints of the assistant's API, the conventions they follow, and how to handle idempotency, pagination, long-running work, and versioning.
 ---
 
+import { IdempotencyDemo } from "@/components/demos/api-design";
+
 A consistent API makes the frontend simpler, makes integrations possible, and makes the system easier to reason about. This page defines the conventions and the main endpoints. Treat it as the contract: generate an OpenAPI specification from your code or write it first, and test against it.
 
 ## Conventions
@@ -108,6 +110,8 @@ How the server handles it:
 4. If found and still in progress, return `409 Conflict`, or for message streams, attach to the existing stream.
 
 Tool confirmations need this most. Confirming "create ticket" twice must create one ticket.
+
+<IdempotencyDemo />
 
 ## Pagination
 
