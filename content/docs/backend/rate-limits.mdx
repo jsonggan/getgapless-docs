@@ -3,6 +3,8 @@ title: Rate Limits and Quotas
 description: How to protect model capacity and budget with request limits and token quotas, which algorithm to use, how to estimate cost before a call, and what to return to clients.
 ---
 
+import { TokenBucketDemo } from "@/components/demos/rate-limits";
+
 In a normal web app, a request costs a fraction of a cent. In an AI app, one request can cost several cents to a dollar, depending on the model and how much context it reads. Model providers also cap throughput per API key. Without limits, one script, one runaway agent loop, or one enthusiastic team can exhaust the budget or the provider quota for everyone.
 
 ## What to limit
@@ -33,6 +35,8 @@ flowchart LR
 ```
 
 Why a token bucket: it allows short bursts (a user asks three quick follow-ups), while enforcing an average rate over time. Fixed windows, such as "30 per calendar minute", allow double bursts at window boundaries and feel arbitrary to users.
+
+<TokenBucketDemo />
 
 Implement it in Redis with an atomic script, so concurrent requests across many API servers share one counter:
 
