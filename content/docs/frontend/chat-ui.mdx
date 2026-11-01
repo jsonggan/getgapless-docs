@@ -3,6 +3,8 @@ title: Chat UI
 description: The parts of a chat interface for an enterprise assistant, what each part must do, and the details that decide whether users trust it.
 ---
 
+import { CitationDemo } from "@/components/demos/chat-ui";
+
 The chat UI looks simple: a list of messages and a text box. The details are what make it trustworthy and usable for work. This page goes through each part and the decisions behind it.
 
 ## Anatomy
@@ -71,6 +73,8 @@ Citations are the single most important trust feature in an enterprise assistant
 **Freshness.** Show the source's last-updated date. A travel policy from 2021 might be outdated, and the user should see that without opening it.
 
 **No sources found.** When retrieval finds nothing relevant, the message should say so clearly: "I could not find this in the documents you have access to." It must not look like a normal answer without citations, or users will trust an answer that came from the model's general knowledge.
+
+<CitationDemo />
 
 ## Feedback
 
