@@ -50,7 +50,7 @@ Chat requests are long-lived streams, mostly waiting on the model. A single inst
 
 - **Scale on concurrent active streams** per instance, not CPU. CPU stays low while instances fill up with waiting connections.
 - Use an async runtime (Node.js, Python asyncio, Go) so waiting streams do not occupy threads.
-- Set **load balancer idle timeouts** above your longest gap between events, and send keep-alive comments. See [Sync and async work](/docs/architecture/sync-async).
+- Set **load balancer idle timeouts** above your longest gap between events, and send keep-alive comments. See [Sync and async work](/docs/backend/sync-async).
 - Size **database connection pools** so that streams do not hold a database connection while waiting on the model. Acquire, query, and release.
 
 ## Scaling workers

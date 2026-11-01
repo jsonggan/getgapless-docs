@@ -1,4 +1,4 @@
 {
   "title": "Frontend",
-  "pages": ["chat-ui", "streaming", "state", "rendering", "accessibility", "error-states", "performance"]
+  "pages": ["basics", "chat-ui", "streaming", "state", "rendering", "accessibility", "error-states", "performance"]
 }

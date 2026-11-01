@@ -1,0 +1,64 @@
+---
+title: From idea to screen
+description: The four steps designers follow to turn an idea into a finished interface, from user flow to final design.
+---
+
+import {
+  ComponentStatesDemo,
+  DesignLoopDemo,
+  DesignSystemDemo,
+  FourStepsDemo,
+  PrinciplesDemo,
+  RealTextDemo,
+  UserFlowDemo,
+  WireframeDemo,
+} from "@/components/demos/design-process";
+
+Good interfaces are not drawn in one go. Each step settles one question before any visual detail is decided. This page follows the process from Juxtopposed's [world's shortest UI/UX design course](https://www.youtube.com/watch?v=wIuVvCuiJhU), a seven-minute video worth watching alongside it.
+
+<FourStepsDemo />
+
+## 1. Start with the user flow
+
+Begin with the problem, not the screen. Write down who the user is and the one goal they came for, then map the shortest path to that goal.
+
+<UserFlowDemo />
+
+## 2. Sketch wireframes
+
+Turn each step into a rough layout. Wireframes are cheap on purpose: you can draw five versions in ten minutes, show them to someone, and throw away four. Pen and paper works, and so do tools such as FigJam, Balsamiq, and Figma.
+
+<WireframeDemo />
+
+## 3. Define a design system
+
+A design system is the set of building blocks every screen is made from: colors, typography, icons, and components. Decide them once, and every screen matches. It can be small, and most teams start from an existing component library.
+
+<DesignSystemDemo />
+
+Every component also needs its states designed, not just its default look.
+
+<ComponentStatesDemo />
+
+## 4. Design, then test
+
+Build the final screens from your wireframes and your design system, and check each screen against six principles.
+
+<PrinciplesDemo />
+
+| Principle | Learn more |
+| --- | --- |
+| Hierarchy | [Visual design](/docs/frontend/basics/visual-design#hierarchy) |
+| Contrast | [Visual design](/docs/frontend/basics/visual-design#color-and-contrast) |
+| Balance | [Visual design](/docs/frontend/basics/visual-design#spacing) |
+| Consistency | [Visual design](/docs/frontend/basics/visual-design#consistency) |
+| Simplicity | [Usability](/docs/frontend/basics/usability#fewer-choices-clearer-path) |
+| Feedback | [Feedback and states](/docs/frontend/basics/feedback) |
+
+Use real text, not placeholder text. For an AI product, fill the screens with real questions and real model answers, including long answers and bad ones.
+
+<RealTextDemo />
+
+Then link the screens into a clickable prototype, put it in front of real users, and fix what confuses them.
+
+<DesignLoopDemo />

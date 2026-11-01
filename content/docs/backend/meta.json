@@ -1,4 +1,4 @@
 {
   "title": "Backend and API",
-  "pages": ["auth", "api-design", "rate-limits", "reliability", "errors"]
+  "pages": ["auth", "api-design", "sync-async", "rate-limits", "reliability", "errors"]
 }

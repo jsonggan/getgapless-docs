@@ -8,7 +8,10 @@ const config = {
   // allow HMR when opening the dev server via LAN IP
   allowedDevOrigins: ['10.41.232.182'],
   async redirects() {
-    return [{ source: '/', destination: '/docs', permanent: false }];
+    return [
+      { source: '/', destination: '/docs', permanent: false },
+      { source: '/docs/architecture/sync-async', destination: '/docs/backend/sync-async', permanent: true },
+    ];
   },
 };
 

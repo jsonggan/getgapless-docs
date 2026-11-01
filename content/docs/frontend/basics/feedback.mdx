@@ -1,0 +1,45 @@
+---
+title: Feedback and states
+description: Why every action needs a visible response, and the states every screen must be designed for.
+---
+
+import {
+  ErrorMessageDemo,
+  PerceivedSpeedDemo,
+  ResponseTimeDemo,
+  SilentClickDemo,
+  StatesDemo,
+  StreamRaceDemo,
+} from "@/components/demos/feedback";
+
+The most common reason an interface feels broken is silence.
+
+<SilentClickDemo />
+
+## Every action gets a response
+
+People judge speed by what they see, not by what the system is doing. What you show depends on how long the wait is.
+
+<ResponseTimeDemo />
+
+AI responses often take several seconds, so most AI products show the answer word by word. See [Streaming](/docs/frontend/streaming).
+
+<StreamRaceDemo />
+
+## Every screen has more than one state
+
+Designs often show only the ideal case. Real screens spend much of their time in other states, and each one needs a design. For the failures specific to AI products, see [Error and empty states](/docs/frontend/error-states).
+
+<StatesDemo />
+
+## Writing error messages
+
+A good error message says what happened, does not blame the user, says what to do next, and keeps the user's work.
+
+<ErrorMessageDemo />
+
+## Perceived speed
+
+How fast something feels matters more than how fast it is. See [Performance](/docs/frontend/performance) for how this applies to AI responses.
+
+<PerceivedSpeedDemo />

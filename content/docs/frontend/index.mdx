@@ -1,9 +1,15 @@
 ---
 title: Frontend
-description: What the frontend of an AI assistant is responsible for, how it is structured, and how it differs from a normal web app frontend.
+description: Why the frontend decides whether anyone believes in what you built, and how to build one that earns that trust.
 ---
 
-The frontend is where users decide whether to trust the assistant. A correct answer that arrives as a frozen spinner for eight seconds, then dumps a wall of text with no sources, feels worse than a slightly weaker answer that streams in immediately with clickable citations. This section covers how to build a frontend that makes AI output fast, verifiable, and safe to display.
+**<Highlight>Your frontend is your credibility.</Highlight>**
+
+You can build an excellent AI system, with a solid evaluation framework, reliable retrieval, and careful guardrails. None of that is visible in a stakeholder demo or a user's first session. Nobody has time to read your eval results. They look at the screen, and they judge the whole system by what they see.
+
+A good UI and UX earns trust instantly. A poor one loses it just as fast, however strong the system behind it is. Treat the frontend as a first-class part of the system, not something you add at the end.
+
+New to UI and UX? Start with [UI/UX basics](/docs/frontend/basics). It covers the fundamentals with no code.
 
 ## What is different about an AI frontend
 
@@ -21,26 +27,9 @@ A normal CRUD app sends a request and renders a response. An AI frontend has to 
 
 ## The design
 
-```mermaid
-flowchart TB
-  subgraph Browser
-    UI[Components<br/>message list, composer,<br/>citations, tool cards]
-    STORE[Client state<br/>active stream, drafts]
-    CACHE[Server state cache<br/>chats, messages, settings]
-    SSE[Stream client<br/>parse events, reconnect]
-    MD[Safe markdown renderer]
-  end
-  UI --> STORE
-  UI --> CACHE
-  SSE --> STORE
-  STORE --> MD --> UI
-  CACHE <-->|REST| API[Backend API]
-  SSE <-->|SSE| ORCH[Orchestrator]
-```
-
 Three kinds of state live in the browser, and keeping them separate is the main structural decision:
 
-- **Server state**: chats, past messages, user settings, documents. Fetched over REST and cached. A library like TanStack Query or SWR handles caching, refetching, and invalidation.
+- **Server state**: chats, past messages, user settings, documents. Fetched over REST and cached.
 - **Stream state**: the message currently being generated. It changes many times per second and must not trigger refetches or re-render the whole app.
 - **UI state**: the draft in the composer, which panel is open, which citation is highlighted.
 

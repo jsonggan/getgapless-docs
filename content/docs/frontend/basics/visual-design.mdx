@@ -1,0 +1,77 @@
+---
+title: Visual design
+description: How layout, spacing, type, and color tell users where to look and what matters.
+---
+
+import {
+  AlignmentDemo,
+  ColorAloneDemo,
+  ColorMeaningDemo,
+  ConsistencyDemo,
+  ContrastDemo,
+  HierarchyDemo,
+  LineLengthDemo,
+  ProximityDemo,
+  ScanDemo,
+  SpacingDemo,
+  ThemeDemo,
+  TypeScaleDemo,
+} from "@/components/demos/visual-design";
+
+Visual design decides what users notice first, what they skip, and what they believe they can click.
+
+<ScanDemo />
+
+## Hierarchy
+
+The most important thing on the screen should be the most noticeable. You control this with size, weight, color, and position. In a chat app, the answer is the content, so controls stay small and muted.
+
+<HierarchyDemo />
+
+## Spacing
+
+Padding and margin are the two tools for placing space.
+
+<SpacingDemo />
+
+Space groups things. Items placed close together read as related, and items placed apart read as separate.
+
+<ProximityDemo />
+
+Line items up along shared edges, and reuse a small set of spacing sizes everywhere.
+
+<AlignmentDemo />
+
+## Typography
+
+Use one or two typefaces and three or four text sizes. Use weight and size for headings, not capitals or underlines.
+
+<TypeScaleDemo />
+
+Keep long text around 60 to 80 characters per line. AI answers are often long, so reading comfort matters more than usual.
+
+<LineLengthDemo />
+
+## Color and contrast
+
+Use color for meaning, not decoration. It is why "Delete" and "Save" should never look the same.
+
+<ColorMeaningDemo />
+
+Keep text readable against its background. The common accessibility standard asks for a contrast ratio of at least 4.5 to 1 for normal text.
+
+<ContrastDemo />
+
+Never rely on color alone. About 1 in 12 men has some form of color blindness, so pair color with an icon or a word.
+
+<ColorAloneDemo />
+
+If you support light and dark mode, check both. A color that works on white can disappear on black.
+
+<ThemeDemo />
+
+## Consistency
+
+The same thing should look and behave the same everywhere, so users learn your product once. Most teams get this from a design system or component library.
+
+<ConsistencyDemo />
