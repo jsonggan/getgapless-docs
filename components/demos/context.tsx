@@ -2,7 +2,7 @@
 
 import { motion } from "motion/react";
 import { cn } from "@/lib/cn";
-import { Badge, Scene, type SceneState, useCount } from "./scene";
+import { Badge, Scene, type SceneState, useBeats, useCount } from "./scene";
 
 type Segment = { name: string; tokens: number; tint: string };
 
@@ -144,6 +144,102 @@ function PromptRow({
             </div>
           );
         })}
+      </div>
+    </div>
+  );
+}
+
+const turnTokens = 400;
+const keepTurns = 6;
+const summaryTokens = 500;
+const historyBudget = 4000;
+const turnCount = 14;
+
+export function HistoryBudgetDemo() {
+  return (
+    <Scene
+      title="History over a long conversation"
+      steps={[
+        {
+          label: "Send every turn",
+          duration: 7000,
+          caption:
+            "Every turn adds about 400 tokens and nothing leaves. After turn 10 the history passes its 4,000 token budget, and every call keeps getting slower and more expensive.",
+        },
+        {
+          label: "Summary + recent turns",
+          duration: 7000,
+          caption:
+            "The last 6 turns stay in full. Older turns fold into a running summary of about 500 tokens that keeps stated facts, such as the user's city and project name.",
+        },
+      ]}
+    >
+      {(scene) => <HistoryStage {...scene} />}
+    </Scene>
+  );
+}
+
+const facts = ["Based in Berlin", "Project Atlas", "Prefers short answers"];
+const summaryBeats = [4200] as const;
+
+function HistoryStage({ step, run }: SceneState) {
+  const trimmed = step === 1;
+  const turns = useCount(run, turnCount, 4200, 300);
+  const beat = useBeats(run, summaryBeats);
+  const folded = trimmed ? Math.max(0, turns - keepTurns) : 0;
+  const kept = turns - folded;
+  const tokens = kept * turnTokens + (folded > 0 ? summaryTokens : 0);
+  const over = tokens > historyBudget;
+  const max = turnCount * turnTokens;
+
+  return (
+    <div className="space-y-4 text-sm">
+      <div className="flex h-12 items-end gap-1">
+        {folded > 0 && (
+          <motion.div
+            layout
+            className="flex h-full shrink-0 items-center justify-center rounded-md bg-violet-500/80 px-2 text-[10px] font-medium text-white"
+            style={{ width: `${(summaryTokens / max) * 100}%` }}
+          >
+            Summary
+          </motion.div>
+        )}
+        {Array.from({ length: kept }, (_, index) => (
+          <motion.div
+            // biome-ignore lint/suspicious/noArrayIndexKey: the key is the turn number, which stays stable as turns fold
+            key={folded + index}
+            layout
+            initial={{ opacity: 0, scaleY: 0.3 }}
+            animate={{ opacity: 1, scaleY: 1 }}
+            className="h-full shrink-0 origin-bottom rounded-md bg-emerald-500/80"
+            style={{ width: `${(turnTokens / max) * 100 - 0.5}%` }}
+          />
+        ))}
+      </div>
+      <div className="relative h-2 rounded-full bg-fd-muted">
+        <motion.div
+          className={cn("h-full rounded-full", over ? "bg-fd-error" : "bg-fd-success")}
+          animate={{ width: `${(tokens / max) * 100}%` }}
+        />
+        <span className="absolute -top-1 h-4 w-0.5 bg-fd-foreground" style={{ left: `${(historyBudget / max) * 100}%` }} />
+      </div>
+      <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+        <span className="tabular-nums text-fd-muted-foreground">
+          Turn {turns}: history is {tokens.toLocaleString("en-US")} tokens. Budget {historyBudget.toLocaleString("en-US")}.
+        </span>
+        {beat >= 1 && <Badge tone={over ? "bad" : "good"}>{over ? "Over budget, still growing" : "Stays under budget"}</Badge>}
+      </div>
+      <div className="min-h-7">
+        {trimmed && folded > 0 && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-wrap items-center gap-1.5 text-xs">
+            <span className="text-fd-muted-foreground">Summary keeps:</span>
+            {facts.map((fact) => (
+              <span key={fact} className="rounded-full bg-violet-500/15 px-2 py-0.5 text-violet-700 dark:text-violet-300">
+                {fact}
+              </span>
+            ))}
+          </motion.div>
+        )}
       </div>
     </div>
   );
