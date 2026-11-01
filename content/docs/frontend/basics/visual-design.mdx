@@ -3,47 +3,75 @@ title: Visual design
 description: How layout, spacing, type, and color tell users where to look and what matters.
 ---
 
-Users do not read a screen. They scan it. Visual design decides what they notice first, what they skip, and what they believe they can click.
+import {
+  AlignmentDemo,
+  ColorAloneDemo,
+  ColorMeaningDemo,
+  ConsistencyDemo,
+  ContrastDemo,
+  HierarchyDemo,
+  LineLengthDemo,
+  ProximityDemo,
+  ScanDemo,
+  SpacingDemo,
+  ThemeDemo,
+  TypeScaleDemo,
+} from "@/components/demos/visual-design";
+
+Visual design decides what users notice first, what they skip, and what they believe they can click.
+
+<ScanDemo />
 
 ## Hierarchy
 
-The most important thing on the screen should be the most noticeable. You control this with size, weight, color, and position.
+The most important thing on the screen should be the most noticeable. You control this with size, weight, color, and position. In a chat app, the answer is the content, so controls stay small and muted.
 
-- Give each screen one primary action. If everything is bold, nothing is.
-- Put the most important content where the eye lands first: top left for left-to-right languages, and the center of the screen.
-- Make secondary controls smaller and quieter.
-
-In a chat app, the answer is the content. Controls like copy, regenerate, and feedback stay small and muted until the user needs them.
-
-A quick test: blur your eyes or step back from the screen. The element that still stands out should be the one that matters most.
+<HierarchyDemo />
 
 ## Spacing
 
-Space groups things. Items placed close together read as related. Items placed apart read as separate.
+Padding and margin are the two tools for placing space.
 
-- Keep related items close, such as a label and its field, or a message and its actions.
-- Add more space between unrelated groups than within them.
-- Line items up along shared edges. Elements that almost line up look like a mistake.
-- Use a small set of spacing sizes and reuse them everywhere. Random spacing makes a screen feel messy even when the content is simple.
+<SpacingDemo />
 
-A crowded screen feels hard to use. Empty space is not wasted space.
+Space groups things. Items placed close together read as related, and items placed apart read as separate.
+
+<ProximityDemo />
+
+Line items up along shared edges, and reuse a small set of spacing sizes everywhere.
+
+<AlignmentDemo />
 
 ## Typography
 
-- Use one or two typefaces and three or four text sizes. More than that looks chaotic.
-- Keep long text at a comfortable line length, around 60 to 80 characters per line. AI answers are often long, so reading comfort matters more than usual.
-- Give lines enough height so paragraphs do not feel cramped.
-- Use weight and size for headings, not all capitals or underlines.
+Use one or two typefaces and three or four text sizes. Use weight and size for headings, not capitals or underlines.
+
+<TypeScaleDemo />
+
+Keep long text around 60 to 80 characters per line. AI answers are often long, so reading comfort matters more than usual.
+
+<LineLengthDemo />
 
 ## Color and contrast
 
-- Use color for meaning, not decoration. One accent color for primary actions, red for destructive actions and errors, green for success.
-- Never rely on color alone. About 1 in 12 men has some form of color blindness. Pair color with an icon or a word, such as a red icon plus the text "Failed".
-- Keep text readable against its background. The common accessibility standard asks for a contrast ratio of at least 4.5 to 1 for normal text.
-- Check both light and dark mode if you support them. A color that works on white can disappear on black.
+Use color for meaning, not decoration. It is why "Delete" and "Save" should never look the same.
+
+<ColorMeaningDemo />
+
+Keep text readable against its background. The common accessibility standard asks for a contrast ratio of at least 4.5 to 1 for normal text.
+
+<ContrastDemo />
+
+Never rely on color alone. About 1 in 12 men has some form of color blindness, so pair color with an icon or a word.
+
+<ColorAloneDemo />
+
+If you support light and dark mode, check both. A color that works on white can disappear on black.
+
+<ThemeDemo />
 
 ## Consistency
 
-The same thing should look and behave the same everywhere. If a blue button means "do this" on one screen, it means the same on every screen.
+The same thing should look and behave the same everywhere, so users learn your product once. Most teams get this from a design system or component library.
 
-Consistency lets users learn your product once. Most teams get it by using a design system or component library instead of styling each screen from scratch.
+<ConsistencyDemo />

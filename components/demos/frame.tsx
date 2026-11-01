@@ -6,11 +6,13 @@ import { cn } from "@/lib/cn";
 // Shared shell for every interactive demo: title, controls, live preview, caption
 export function DemoFrame({
   title,
+  action,
   controls,
   caption,
   children,
 }: {
   title: string;
+  action?: ReactNode;
   controls?: ReactNode;
   caption?: ReactNode;
   children: ReactNode;
@@ -24,6 +26,7 @@ export function DemoFrame({
           </span>
           <span className="text-sm font-medium">{title}</span>
         </div>
+        {action}
       </div>
       {controls && (
         <div className="flex flex-wrap items-center gap-x-6 gap-y-3 border-b bg-fd-muted/40 px-4 py-3">

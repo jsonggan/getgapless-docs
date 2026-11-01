@@ -29,8 +29,11 @@ export const source = loader({
   plugins: [lucideIconsPlugin()],
 });
 
+// Interactive demos have no text form, so leave their tags out of the markdown
+const stripDemos = (text: string) => text.replace(/^<\w+Demo \/>\n+/gm, '');
+
 export const docsLlms = llms(source, {
   renderPage: async (page) => `# ${page.data.title} (${page.url})
 
-${await page.data.getText('processed')}`,
+${stripDemos(await page.data.getText('processed'))}`,
 });

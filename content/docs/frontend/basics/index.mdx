@@ -3,6 +3,8 @@ title: UI/UX basics
 description: Just enough UI and UX to follow the rest of this section, for readers who have never designed an interface.
 ---
 
+import { CanTheUserTellDemo, UiVsUxDemo } from "@/components/demos/overview";
+
 This part is for readers who have never designed an interface. If you can answer these three questions, skip it and go to [Chat UI](/docs/frontend/chat-ui):
 
 - A new user opens your app and has no data yet. What should the screen show?
@@ -11,16 +13,15 @@ This part is for readers who have never designed an interface. If you can answer
 
 ## UI and UX are not the same thing
 
-- **UI (user interface)** is what people see and touch: layout, text, colors, buttons, icons.
-- **UX (user experience)** is how it feels to use: whether people reach their goal, how quickly, and how confident they feel along the way.
+**UI (user interface)** is what people see and touch. **UX (user experience)** is how it feels to use: whether people reach their goal, how quickly, and how confident they feel.
 
-A beautiful screen can still be a bad experience. If people cannot tell where to click, or wait with no sign that anything is happening, the polish does not matter. Good UI supports good UX. It does not replace it.
+<UiVsUxDemo />
 
 ## The question behind every decision
 
 Every UI and UX choice answers one question: **can the user tell, at every moment, what is happening and what they can do next?**
 
-When the answer is yes, the product feels easy and trustworthy. When the answer is no, users hesitate, guess, and lose confidence in the product.
+<CanTheUserTellDemo />
 
 ## What this part covers
 
