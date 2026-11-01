@@ -3,6 +3,8 @@ title: Caching and Cost
 description: Where the money goes in an AI assistant, how to estimate it, and the caching, routing, and design techniques that reduce cost and latency without hurting quality.
 ---
 
+import { PromptCacheDemo } from "@/components/demos/context";
+
 Model calls are usually the largest variable cost in an AI system, and they scale with usage in ways that surprise finance teams. This page shows how to estimate cost, where it really goes, and how to reduce it.
 
 ## How cost is calculated
@@ -60,6 +62,8 @@ To benefit:
 - **Keep the stable prefix byte-identical.** A timestamp or request ID in the system prompt breaks the cache on every call. Put the date at the end of the instructions block or in the user message, and only at day granularity.
 - **Mark cache breakpoints** if your provider requires explicit markers.
 - **Check the cache hit rate** in usage data. Many teams think they are caching and are not.
+
+<PromptCacheDemo />
 
 Prompt caching helps most for agents, where each step resends the same long prefix, and for long documents asked about repeatedly.
 
