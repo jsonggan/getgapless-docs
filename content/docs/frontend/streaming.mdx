@@ -3,6 +3,8 @@ title: Streaming
 description: How the frontend receives, parses, and renders a streamed answer, and how it handles cancelling, reconnecting, and scrolling.
 ---
 
+import { AutoScrollDemo, SSEParsingDemo } from "@/components/demos/streaming";
+
 Streaming turns a 10 second wait into text that starts appearing within about a second. It is the most important performance feature in an AI frontend. It is also where most frontend bugs live: half-parsed events, duplicated text after reconnects, and scroll jumping while the user is reading.
 
 ## The design
@@ -59,6 +61,8 @@ Give every event an `id`. The id lets the client resume after a dropped connecti
 ## Parsing SSE from fetch
 
 SSE is text: events are separated by a blank line, and each line is `field: value`. The tricky part is that a network chunk can end in the middle of a line or even in the middle of a multi-byte character. Always buffer and split on complete events.
+
+<SSEParsingDemo />
 
 ```ts
 export async function* readSSE(res: Response) {
@@ -145,6 +149,8 @@ Whichever you choose:
 Users hate two things: the page not following new text, and the page yanking them back down while they are reading earlier text.
 
 The rule: **follow the stream only while the user is at the bottom.**
+
+<AutoScrollDemo />
 
 - Track whether the viewport is within about 80 px of the bottom.
 - If yes, scroll to the bottom when new content renders.
