@@ -7,10 +7,10 @@ import { cn } from "@/lib/cn";
 import { Badge, Scene, type SceneState, useCount } from "./scene";
 
 const blocks = [
-  { name: "Open", detail: "Header", real: "Policy assistant", color: "#2563eb" },
-  { name: "Ask", detail: "Question", real: "How much leave do I get?", color: "#2563eb" },
-  { name: "Read", detail: "Answer", real: "16 weeks of paid parental leave.", color: "#e5e7eb" },
-  { name: "Follow up", detail: "Input", real: "Ask a follow-up", color: "#f3f4f6" },
+  { name: "Open", real: "Policy assistant", color: "#2563eb" },
+  { name: "Ask", real: "How much leave do I get?", color: "#2563eb" },
+  { name: "Read", real: "16 weeks of paid parental leave.", color: "#e5e7eb" },
+  { name: "Follow up", real: "Ask a follow-up", color: "#f3f4f6" },
 ];
 
 // Where each block sits, in percent of the stage: left, top, width, height
@@ -33,9 +33,9 @@ export function FourStepsDemo() {
       title="One idea, four steps"
       steps={[
         { label: "1. User flow", caption: "A map of steps: what the user is trying to do, and the path that gets them there." },
-        { label: "2. Wireframes", caption: "Each step becomes a rough layout: what goes on the screen and where. No color or style." },
-        { label: "3. Design system", caption: "The building blocks arrive: colors, type, icons, and components." },
-        { label: "4. Design", caption: "The blocks come together into a finished screen with real text." },
+        { label: "2. Design system", caption: "The building blocks arrive: colors, type, icons, and components." },
+        { label: "3. Generate", caption: "AI turns the flow and the building blocks into a working HTML screen with real text." },
+        { label: "4. Share and test", caption: "Send the HTML to reviewers and users, who click through it in a browser." },
       ]}
     >
       {({ step }) => (
@@ -46,9 +46,9 @@ export function FourStepsDemo() {
             initial={false}
             animate={{ opacity: step === 0 ? 1 : 0 }}
           />
-          {blocks.map(({ name, detail, real, color }, index) => {
-            const [left, top, width, height] = (step === 0 ? flowLayout : screenLayout)[index];
-            const styled = step >= 2;
+          {blocks.map(({ name, real, color }, index) => {
+            const [left, top, width, height] = (step <= 1 ? flowLayout : screenLayout)[index];
+            const styled = step >= 1;
             const light = index >= 2;
             return (
               <motion.div
@@ -63,27 +63,36 @@ export function FourStepsDemo() {
                   borderRadius: step === 0 ? 999 : styled ? 10 : 2,
                   backgroundColor: styled ? color : "#ffffff",
                   color: styled && !light ? "#ffffff" : "#1f2937",
-                  borderColor: step === 1 ? "#6b7280" : "#d1d5db",
+                  borderColor: "#d1d5db",
                   borderWidth: 1,
-                  borderStyle: step === 1 ? "dashed" : "solid",
                 }}
                 transition={{ type: "spring", stiffness: 160, damping: 22, delay: index * 0.06 }}
               >
-                {step === 0 ? name : step === 3 ? real : detail}
+                {step <= 1 ? name : real}
               </motion.div>
             );
           })}
           <AnimatePresence>
-            {step === 2 && (
+            {step === 1 && (
               <motion.div
-                className="absolute top-1/2 left-2 flex -translate-y-1/2 flex-col gap-1.5"
-                initial={{ opacity: 0, x: -16 }}
-                animate={{ opacity: 1, x: 0 }}
+                className="absolute inset-x-0 top-10 flex justify-center gap-1.5"
+                initial={{ opacity: 0, y: -16 }}
+                animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0 }}
               >
                 {["#2563eb", "#e5e7eb", "#dc2626", "#16a34a"].map((color) => (
                   <span key={color} className="size-5 rounded-full border" style={{ backgroundColor: color }} />
                 ))}
+              </motion.div>
+            )}
+            {step === 3 && (
+              <motion.div
+                className="absolute top-2 left-2"
+                initial={{ opacity: 0, x: -16 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0 }}
+              >
+                <Badge tone="good">Shared</Badge>
               </motion.div>
             )}
           </AnimatePresence>
@@ -152,48 +161,48 @@ function UserFlowStage({ step, run }: SceneState) {
   );
 }
 
-const sketches = [
+const versions = [
   "grid-cols-[1fr_3fr] grid-rows-[3fr_1fr] [grid-template-areas:'nav_chat'_'nav_input']",
   "grid-cols-[3fr_1fr] grid-rows-[1fr_3fr_1fr] [grid-template-areas:'nav_nav'_'chat_src'_'input_src']",
   "grid-cols-1 grid-rows-[1fr_3fr_1fr] [grid-template-areas:'nav'_'chat'_'input']",
 ];
 
-const sketchBoxes = [
-  { name: "nav", label: "Menu" },
-  { name: "chat", label: "Answer" },
-  { name: "input", label: "Input" },
-  { name: "src", label: "Sources" },
+const versionBoxes = [
+  { name: "nav", label: "Policy assistant", className: "bg-blue-600 text-white" },
+  { name: "chat", label: "16 weeks of paid parental leave.", className: "bg-fd-background" },
+  { name: "input", label: "Ask a follow-up", className: "bg-fd-muted text-fd-muted-foreground" },
+  { name: "src", label: "Sources", className: "bg-fd-background text-fd-muted-foreground" },
 ];
 
-export function WireframeDemo() {
+export function GenerateDemo() {
   return (
     <Scene
-      title="Sketches are cheap"
+      title="Versions are cheap"
       steps={[
-        { label: "Version 1", duration: 2800, caption: "Boxes for content, labels for buttons. No colors, fonts, or images yet." },
-        { label: "Version 2", duration: 2800, caption: "Move a box and you have a new idea. It takes seconds." },
-        { label: "Version 3", duration: 2800, caption: "Show the versions to someone and throw most of them away. In a finished design, the same move takes hours." },
+        { label: "Version 1", duration: 2800, caption: "The first version keeps a menu beside the conversation, built from your design system." },
+        { label: "Version 2", duration: 2800, caption: "Ask for sources next to the answer and you have a new idea to click through." },
+        { label: "Version 3", duration: 2800, caption: "Compare the versions and throw most of them away. By hand, each one would take hours." },
       ]}
     >
       {({ step }) => (
         <>
-          <div className={cn("grid h-56 gap-2 rounded-lg border-2 border-dashed p-2", sketches[step])}>
-            {sketchBoxes
+          <div className={cn("grid h-56 gap-2 rounded-lg border p-2", versions[step])}>
+            {versionBoxes
               .filter(({ name }) => name !== "src" || step === 1)
-              .map(({ name, label }) => (
+              .map(({ name, label, className }) => (
                 <motion.div
                   layout
                   key={name}
                   style={{ gridArea: name }}
-                  className="flex items-center justify-center rounded border border-fd-muted-foreground/50 bg-fd-background text-xs text-fd-muted-foreground"
+                  className={cn("flex items-center justify-center rounded-md border p-2 text-center text-xs", className)}
                 >
                   {label}
                 </motion.div>
               ))}
           </div>
           <div className="mt-4 space-y-1.5 text-xs text-fd-muted-foreground">
-            <CostBar label="Move a box in a sketch" width="2%" time="seconds" />
-            <CostBar label="Move it in a finished design" width="100%" time="hours" />
+            <CostBar label="Ask AI for a new version" width="4%" time="minutes" />
+            <CostBar label="Build the same version by hand" width="100%" time="hours" />
           </div>
         </>
       )}
@@ -417,7 +426,7 @@ export function RealTextDemo() {
   );
 }
 
-const loopStages = ["User flow", "Wireframes", "Design", "Test"];
+const loopStages = ["User flow", "Generate", "Share", "Test"];
 
 export function DesignLoopDemo() {
   return (
@@ -425,7 +434,7 @@ export function DesignLoopDemo() {
       title="Design is a loop"
       steps={[
         ...loopStages.map((label) => ({ label, duration: 1800, caption: "Work moves forward one step at a time." })),
-        { label: "Back to the start", duration: 2400, caption: "Testing shows what confuses people, which often sends you back to the flow or the wireframes." },
+        { label: "Back to the start", duration: 2400, caption: "Testing shows what confuses people, which often sends you back to the flow or to a new version." },
       ]}
     >
       {({ step }) => (
