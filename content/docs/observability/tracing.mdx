@@ -3,6 +3,8 @@ title: Tracing
 description: How to trace every request across the frontend, orchestrator, retrieval, model calls, and tools, what each span should record, and how to handle prompt content in traces safely.
 ---
 
+import { TraceWaterfallDemo } from "@/components/demos/tracing";
+
 A trace is the full story of one request: every step, its timing, and the data that matters for debugging. For an AI assistant, a good trace answers "why did it say that?" by showing the rewritten query, the retrieved chunks with scores, the exact prompt version, the model's response, and every tool call.
 
 ## Shape of a chat trace
@@ -22,6 +24,8 @@ flowchart TB
 ```
 
 Reading this trace, you can immediately see that generation dominated, time to first token was 820 ms, and retrieval was healthy.
+
+<TraceWaterfallDemo />
 
 ## Span attributes
 
