@@ -3,6 +3,8 @@ title: State Management
 description: How to model the lifecycle of a chat message in the browser, keep server state and stream state apart, and avoid the race conditions chat apps are prone to.
 ---
 
+import { MessageLifecycleDemo } from "@/components/demos/state";
+
 Chat state looks simple until two things happen at once: the user switches conversations while an answer is streaming, or clicks regenerate while a stop request is in flight. This page shows a state model that stays correct under those conditions.
 
 ## Three kinds of state
@@ -71,6 +73,8 @@ function transition(msg: Message, next: Status): Message {
 ```
 
 Ignoring invalid transitions, instead of applying them, protects against late events. A `token` event that arrives after the user pressed stop should not flip the message back to `streaming`.
+
+<MessageLifecycleDemo />
 
 ## Optimistic updates
 
