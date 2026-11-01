@@ -3,7 +3,7 @@ title: Streaming
 description: How the frontend receives, parses, and renders a streamed answer, and how it handles cancelling, reconnecting, and scrolling.
 ---
 
-import { AutoScrollDemo, SSEParsingDemo } from "@/components/demos/streaming";
+import { AutoScrollDemo, RenderCountDemo, SSEParsingDemo } from "@/components/demos/streaming";
 
 Streaming turns a 10 second wait into text that starts appearing within about a second. It is the most important performance feature in an AI frontend. It is also where most frontend bugs live: half-parsed events, duplicated text after reconnects, and scroll jumping while the user is reading.
 
@@ -104,6 +104,8 @@ Tokens can arrive 50 to 100 times per second. Re-rendering a long markdown messa
 - **Batch updates per animation frame.** Append tokens to a buffer and flush to state once per `requestAnimationFrame`. Users cannot see faster updates anyway.
 - **Only re-render the streaming message.** Completed messages are memoized and never re-render while another streams.
 - **Keep the stream state outside of global context.** A context update re-renders every consumer. Use a store with selectors, so only the streaming message subscribes to the text.
+
+<RenderCountDemo />
 
 ```ts
 let pending = '';

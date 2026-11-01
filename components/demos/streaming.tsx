@@ -322,3 +322,93 @@ function AutoScrollStage({ step, run }: SceneState) {
     </div>
   );
 }
+
+const history = [
+  { who: "You", text: "How much parental leave do I get?" },
+  { who: "Assistant", text: "Full-time employees get 16 weeks of paid parental leave [1]." },
+  { who: "You", text: "Can I split it?" },
+  { who: "Assistant", text: "Yes, in up to two blocks within the first year [1]." },
+];
+
+const streamedReply = "If both parents work here, each parent gets the full 16 weeks.";
+const tokenCount = 240;
+const renderTime = 3000;
+const framesPerSecond = 60;
+const tokensPerSecond = tokenCount / (renderTime / 1000);
+
+export function RenderCountDemo() {
+  return (
+    <Scene
+      title="Who re-renders on each token"
+      steps={[
+        {
+          label: "Every token, every message",
+          duration: renderTime + 2600,
+          caption:
+            "Each token updates shared state, so every message in the list renders again, 80 times a second. Long chats start to stutter.",
+        },
+        {
+          label: "Batched, streaming message only",
+          duration: renderTime + 2600,
+          caption:
+            "Finished messages are memoized and never render again. The streaming message flushes its buffer once per animation frame, at most 60 times a second.",
+        },
+      ]}
+    >
+      {(scene) => <RenderCountStage {...scene} />}
+    </Scene>
+  );
+}
+
+function RenderCountStage({ step, run }: SceneState) {
+  const fixed = step === 1;
+  const tokens = useCount(run, tokenCount, renderTime, 300);
+  const streaming = tokens > 0 && tokens < tokenCount;
+  const streamRenders = fixed ? Math.ceil(tokens * Math.min(1, framesPerSecond / tokensPerSecond)) : tokens;
+  const oldRenders = fixed ? 1 : 1 + tokens;
+  const total = history.length * oldRenders + streamRenders;
+  const rows = [...history.map((message) => ({ ...message, renders: oldRenders, live: !fixed && streaming })), {
+    who: "Assistant",
+    text: streamedReply.slice(0, Math.round((streamedReply.length * tokens) / tokenCount)),
+    renders: streamRenders,
+    live: streaming,
+  }];
+
+  return (
+    <div className="space-y-3">
+      <div className="space-y-1.5 rounded-lg border bg-fd-background p-3 text-sm">
+        {rows.map((row, index) => (
+          <div
+            // biome-ignore lint/suspicious/noArrayIndexKey: fixed list
+            key={index}
+            className={cn(
+              "flex items-center justify-between gap-3 rounded-md px-2 py-1.5 transition-shadow",
+              row.live && "ring-2 ring-amber-500/70",
+            )}
+          >
+            <span className="min-w-0 truncate">
+              <span className="text-fd-muted-foreground">{row.who}: </span>
+              {row.text}
+            </span>
+            <span
+              className={cn(
+                "shrink-0 rounded-full px-2 py-0.5 font-mono text-[11px] tabular-nums",
+                row.live ? "bg-amber-500/15 text-amber-700 dark:text-amber-400" : "bg-fd-muted text-fd-muted-foreground",
+              )}
+            >
+              {row.renders} {row.renders === 1 ? "render" : "renders"}
+            </span>
+          </div>
+        ))}
+      </div>
+      <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-fd-muted-foreground">
+        <span className="tabular-nums">
+          {tokens} tokens received, {total} renders in total
+        </span>
+        {tokens === tokenCount && (
+          <Badge tone={fixed ? "good" : "bad"}>{fixed ? "Only the new message did work" : "Old messages rendered 241 times each"}</Badge>
+        )}
+      </div>
+    </div>
+  );
+}
