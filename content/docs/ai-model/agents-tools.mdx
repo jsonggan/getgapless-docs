@@ -3,6 +3,8 @@ title: Agents and Tools
 description: How to give the assistant tools, run an agent loop safely, design tool interfaces models use well, and keep side effects under human control.
 ---
 
+import { AgentLoopDemo } from "@/components/demos/agents";
+
 Tools let the assistant do more than write text: search a ticket system, look up a customer record, check a calendar, or create a ticket. An **agent** is a loop where the model chooses tools, sees their results, and decides what to do next until the task is done.
 
 Tools are where AI systems become genuinely useful and genuinely risky. A wrong answer misleads one person. A wrong action changes real data.
@@ -119,6 +121,8 @@ async function runAgent(ctx: RequestContext, messages: Message[], tools: ToolDef
 | Total turn time | 2 to 5 minutes | Longer tasks become background jobs |
 
 Also detect repetition: the same tool with the same arguments three times in a row means the agent is stuck. Stop and tell the user.
+
+<AgentLoopDemo />
 
 ## The tool service
 
