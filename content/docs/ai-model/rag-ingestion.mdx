@@ -3,6 +3,8 @@ title: RAG Ingestion
 description: How documents become searchable chunks, covering parsing, cleaning, chunking, metadata, embeddings, and keeping the index in sync with sources.
 ---
 
+import { ChunkingDemo } from "@/components/demos/rag";
+
 Retrieval can only find what ingestion put in the index, in the shape ingestion gave it. Most "the assistant can't find it" bugs are ingestion bugs: a table parsed into garbage, a heading separated from its content, a document indexed twice in two versions, or permissions that were never copied.
 
 ## The design
@@ -69,6 +71,8 @@ Split on the document's own structure first, and fall back to size limits only w
 2. If a section is over the size limit, split by paragraphs.
 3. If a paragraph is over the limit, split by sentences.
 4. Never split inside a table row, list item, or code block.
+
+<ChunkingDemo />
 
 ### Contextual headers
 

@@ -1,6 +1,6 @@
 ---
 title: From idea to screen
-description: The four steps designers follow to turn an idea into a finished interface, from user flow to final design.
+description: The four steps that turn an idea into a finished interface, from user flow to a shared HTML prototype.
 ---
 
 import {
@@ -8,31 +8,25 @@ import {
   DesignLoopDemo,
   DesignSystemDemo,
   FourStepsDemo,
+  GenerateDemo,
   PrinciplesDemo,
   RealTextDemo,
   UserFlowDemo,
-  WireframeDemo,
 } from "@/components/demos/design-process";
 
-Good interfaces are not drawn in one go. Each step settles one question before any visual detail is decided. This page follows the process from Juxtopposed's [world's shortest UI/UX design course](https://www.youtube.com/watch?v=wIuVvCuiJhU), a seven-minute video worth watching alongside it.
+Good interfaces are not drawn in one go. Each step settles one question before the next one starts. Teams used to begin with wireframes, grey-box sketches of each screen. AI has made that step unnecessary: a realistic, clickable screen in HTML now takes about the same effort, and people can use it instead of imagining it.
 
 <FourStepsDemo />
 
 ## 1. Start with the user flow
 
-Begin with the problem, not the screen. Write down who the user is and the one goal they came for, then map the shortest path to that goal.
+Begin with the problem, not the screen. Write down who the user is and the one goal they came for, then map the shortest path to that goal. Settle this before you generate anything, because AI makes it easy to polish the wrong screen.
 
 <UserFlowDemo />
 
-## 2. Sketch wireframes
+## 2. Define a design system
 
-Turn each step into a rough layout. Wireframes are cheap on purpose: you can draw five versions in ten minutes, show them to someone, and throw away four. Pen and paper works, and so do tools such as FigJam, Balsamiq, and Figma.
-
-<WireframeDemo />
-
-## 3. Define a design system
-
-A design system is the set of building blocks every screen is made from: colors, typography, icons, and components. Decide them once, and every screen matches. It can be small, and most teams start from an existing component library.
+A design system is the set of building blocks every screen is made from: colors, typography, icons, and components. Decide them once, and every screen matches. It can be small, and most teams start from an existing component library. It is also what you hand to the AI in the next step. Without one, the output tends to look like every other AI-generated app.
 
 <DesignSystemDemo />
 
@@ -40,9 +34,17 @@ Every component also needs its states designed, not just its default look.
 
 <ComponentStatesDemo />
 
-## 4. Design, then test
+## 3. Generate the design with AI
 
-Build the final screens from your wireframes and your design system, and check each screen against six principles.
+Describe the user flow to an AI design tool such as [Claude Design](https://support.claude.com/en/articles/14604416-get-started-with-claude-design), point it at your design system or codebase, and ask for HTML. You get screens built from real components that people can click through and change by asking. Ask for several versions and keep one.
+
+<GenerateDemo />
+
+Use real text, not placeholder text. For an AI product, fill the screens with real questions and real model answers, including long answers and bad ones.
+
+<RealTextDemo />
+
+Then check the version you kept against six principles, and ask for fixes where it falls short.
 
 <PrinciplesDemo />
 
@@ -55,10 +57,13 @@ Build the final screens from your wireframes and your design system, and check e
 | Simplicity | [Usability](/docs/frontend/basics/usability#fewer-choices-clearer-path) |
 | Feedback | [Feedback and states](/docs/frontend/basics/feedback) |
 
-Use real text, not placeholder text. For an AI product, fill the screens with real questions and real model answers, including long answers and bad ones.
+## 4. Share the HTML and test
 
-<RealTextDemo />
+Share the HTML itself, not a picture of it. It opens in any browser, so reviewers need no design tool, and they can click through the flow instead of looking at it. Flow problems and visual problems surface in the same round.
 
-Then link the screens into a clickable prototype, put it in front of real users, and fix what confuses them.
+- **Tell reviewers what to judge.** A realistic screen invites comments on colors and polish. If the question is the flow, say so.
+- **Put it in front of real users.** Give them the goal, watch them try to reach it, and fix what confuses them.
+- **Check what is on the page before you send it.** Everyone with the link or file gets all of its text, so remove customer data.
+- **Treat the generated code as a starting point.** When a design moves into the product, review that code like any other pull request.
 
 <DesignLoopDemo />
