@@ -1,9 +1,9 @@
 ---
 title: Backend and API
-description: The backend services of the assistant, what each one owns, how they talk to each other, and where data is stored.
+description: What the backend is responsible for, the parts it is made of, how to group them, and the design choices covered in this section.
 ---
 
-The backend turns a user's message into a safe, permission-checked, logged, and streamed answer. It also runs everything that happens in the background: ingestion, syncs, evals, and cleanup. This page maps the services and their responsibilities. The other pages in this section cover the API contract and the cross-cutting concerns every service must get right.
+The backend turns a user's message into a safe, permission-checked, logged, and streamed answer. It also runs everything that happens in the background: ingestion, syncs, evals, and cleanup. This page is the map. The other pages in this section each take one design question, lay out the options, and explain what each option costs.
 
 ## The design
 
@@ -31,73 +31,51 @@ flowchart TB
   MG --> PROV[Model providers]
 ```
 
-As recommended in [Key decisions](/docs/architecture/decisions), most logic lives in **one backend application** split into modules. A few parts run separately because they scale differently or hold powerful credentials.
+## What the backend is responsible for
+
+| Responsibility | What it means in practice | Page |
+| --- | --- | --- |
+| Run a chat turn | Coordinate history, guardrails, retrieval, the model call, tools, and saving, and stream the result | [Chat orchestration](/docs/backend/orchestration) |
+| Offer a stable contract | One API style, one error format, predictable streaming, safe retries | [API design](/docs/backend/api-design) |
+| Know who is asking | Sign-in, sessions, roles, document permissions, acting in other systems for the user | [Authentication and authorization](/docs/backend/auth) |
+| Keep slow work out of requests | Decide what runs in the request, what streams, and what becomes a background job | [Sync and async work](/docs/backend/sync-async) |
+| Store state | Pick the right store for each kind of data, and know what must be backed up | [Data stores](/docs/backend/data-stores) |
+| Protect capacity and budget | Request limits, token quotas, provider limits | [Rate limits and quotas](/docs/backend/rate-limits) |
+| Survive failing dependencies | Timeouts, retries, fallbacks, circuit breakers, cancellation | [Reliability](/docs/backend/reliability) |
+| Fail clearly | One error shape and a stable set of error codes | [Errors](/docs/backend/errors) |
+
+## How to group the parts
+
+The same responsibilities can be deployed in very different shapes.
+
+| Option | How it looks | Strengths | Weaknesses |
+| --- | --- | --- | --- |
+| **Single application** | Everything, including background jobs, in one deployable | Fastest to build and debug. One deploy | Slow jobs compete with chat. One crash affects everything. Every part holds every credential |
+| **Modular monolith with a few separate services** | One application split into strict modules, plus separate workers, retrieval, tool service, and model gateway | Simple core, while the parts that scale differently or hold powerful credentials are isolated | Module boundaries need discipline, or the monolith turns into a tangle |
+| **Microservices** | Each module is its own service with its own data | Teams ship independently. Each part scales on its own | Network hops, distributed tracing, more deploys, more failure modes. Heavy for a small team |
+
+**Default:** the modular monolith. Split out a part only when it scales differently, holds credentials others must not have, or must fail without taking the rest down. The full set of factors is in [Key decisions](/docs/architecture/decisions).
 
 ## Services and modules
 
 | Part | Runs as | Owns | Why it is separate or not |
 | --- | --- | --- | --- |
-| API gateway | Managed gateway or a thin proxy | TLS, auth token validation, rate limits, routing | Rejects bad traffic before it costs anything |
-| Chat module (orchestrator) | Module in the backend app | Running a chat turn: history, guardrails, retrieval, prompt, model call, tools, saving | Core logic, changes often, benefits from being easy to debug |
-| Conversations module | Module | Listing, renaming, deleting, sharing conversations | Simple CRUD |
-| Documents module | Module | Uploads, document lists, ingestion job status | Creates jobs, does not do heavy work itself |
-| Admin module | Module | Tenant settings, connectors, usage reports, user roles | Admin-only endpoints with stricter checks |
+| API gateway | Managed gateway or a thin proxy | TLS, token validation, request rate limits, routing | Rejects bad traffic before it costs anything |
+| Chat module (orchestrator) | Module in the backend app | Running a chat turn from message to saved answer | Core logic that changes often. Easiest to debug in-process |
+| Conversations module | Module | Listing, renaming, deleting, and sharing conversations | Simple reads and writes |
+| Documents module | Module | Uploads, document lists, ingestion job status | Creates jobs. Does no heavy work itself |
+| Admin module | Module | Tenant settings, connectors, usage reports, user roles | Admin-only, with stricter checks |
 | Feedback module | Module | Ratings, reasons, flags for review | Feeds evaluation |
-| Model gateway | Separate service or library | Provider adapters, retries, fallback, token counting, cost tracking | Shared by online and batch paths. A service if several apps use it |
-| Retrieval service | Separate service | Hybrid search, permission filters, re-ranking | Different scaling and latency profile. Often colocated with the index |
-| Tool service | Separate service | Executing actions in other systems | Holds credentials for other systems. Separate security boundary |
-| Workers | Separate deployments | Ingestion, connector syncs, eval runs, cleanup | Long-running, CPU and memory heavy, must not slow the API |
+| Model gateway | Separate service or shared library | Provider adapters, retries, fallback, token counting, cost tracking | Used by online and batch paths. A service once several apps share it |
+| Retrieval service | Separate service | Hybrid search, permission filters, re-ranking | Different scaling and latency profile. Often next to the index |
+| Tool service | Separate service | Executing actions in other systems | Holds credentials for other systems. Its own security boundary |
+| Workers | Separate deployments | Ingestion, connector syncs, eval runs, cleanup | Long-running and resource-heavy. Must not slow the API |
 
-## Data stores
+## Principles that apply everywhere
 
-| Store | Holds | Notes |
-| --- | --- | --- |
-| Postgres | Tenants, users, conversations, messages, sources used, feedback, jobs, settings, audit events | Use row-level security by tenant |
-| Redis | Rate limit counters, short-lived caches, stream replay buffers, locks | Everything here can be lost without data loss |
-| Object storage | Uploaded files, parsed text, exports | Prefix by tenant. Encrypt at rest. Lifecycle rules for deletion |
-| Search index | Chunks, embeddings, metadata, ACLs | Rebuildable from source documents and object storage |
-
-A useful test for every store: **if it were wiped, could you rebuild it?** Postgres cannot be rebuilt, so it needs backups and point-in-time recovery. The search index can be rebuilt from sources, but it takes hours to days, so it still needs a recovery plan. Redis can be lost. See [Disaster recovery](/docs/deployment/disaster-recovery).
-
-## The chat turn in code
-
-The orchestrator's core is a single function that reads like the request lifecycle. Keep it this readable. If it grows past a few hundred lines, extract steps into functions, but keep the top-level sequence in one place.
-
-```ts
-export async function runChatTurn(ctx: RequestContext, input: ChatInput, stream: EventStream) {
-  const conversation = await conversations.load(ctx, input.conversationId);
-  const history = trimHistory(conversation.messages, CONTEXT_BUDGET.history);
-
-  const inputCheck = await guardrails.checkInput(ctx, input.text);
-  if (!inputCheck.allowed) return stream.error('input_blocked', inputCheck.reason);
-
-  const query = history.length ? await rewriteQuery(ctx, history, input.text) : input.text;
-  stream.status('Searching documents');
-  const chunks = await retrieval.search(ctx, query, { topK: 8 });
-  stream.sources(chunks);
-
-  const prompt = prompts.render('answer_v14', { chunks, history, question: input.text, ctx });
-  const result = await modelGateway.stream(ctx, { model: 'primary', prompt }, (token) => stream.token(token));
-
-  const outputCheck = await guardrails.checkOutput(ctx, result.text, chunks);
-  if (!outputCheck.allowed) return stream.error('output_blocked', outputCheck.reason);
-
-  const saved = await conversations.saveTurn(ctx, {
-    input, output: result, chunkIds: chunks.map((c) => c.id), promptVersion: 'answer_v14',
-  });
-  stream.done({ messageId: saved.id, usage: result.usage });
-}
-```
-
-`RequestContext` carries the user ID, tenant ID, permission groups, trace ID, and a cancellation signal. Every function takes it. That single habit makes tenant isolation, tracing, and cancellation work everywhere without extra effort.
-
-## Pages in this section
-
-| Page | Covers |
-| --- | --- |
-| [Authentication and authorization](/docs/backend/auth) | SSO, sessions, roles, service identities, acting on behalf of users in other systems |
-| [API design](/docs/backend/api-design) | Resources, endpoints, idempotency, pagination, versioning |
-| [Sync and async work](/docs/backend/sync-async) | What runs in the request, what streams, what goes to background jobs, queues and retries |
-| [Rate limits and quotas](/docs/backend/rate-limits) | Request and token limits, algorithms, headers, cost estimation |
-| [Reliability](/docs/backend/reliability) | Timeouts, retries, fallbacks, circuit breakers, cancellation |
-| [Errors](/docs/backend/errors) | Error format and the full error code reference |
+- **Every request carries a context.** User, tenant, permission groups, trace ID, deadline, and a cancellation signal travel with every call. Tenant isolation, tracing, and cancellation then work everywhere without each feature remembering them.
+- **The server decides behavior.** Model, system prompt, and sampling settings come from tenant settings and versioned templates, never from the client.
+- **Tenant comes from the verified identity.** Never from a path, a body, or a header a caller can set.
+- **Slow work leaves the request.** If a user could close the tab and still want the result, it is a background job.
+- **Every external call has a timeout, and every write can be retried safely.**
+- **The chat flow reads top to bottom in one place.** Anyone on the team can follow a turn from start to finish. See [Chat orchestration](/docs/backend/orchestration).

@@ -1,0 +1,82 @@
+---
+title: Data Stores
+description: Which store holds which data, the options for each kind of data, how to cache safely, and how to decide what must be backed up and what can be rebuilt.
+---
+
+An AI assistant stores very different kinds of data: conversations that must never be lost, counters that can vanish, files measured in gigabytes, and search indexes that can be rebuilt. Putting each in a store built for its access pattern keeps the system fast and recoverable. This page covers the choices. The tables and fields are in [Schema and lineage](/docs/data/schema).
+
+## Match each kind of data to a store
+
+| Data | Access pattern | Options | Default |
+| --- | --- | --- | --- |
+| Tenants, users, conversations, messages, feedback, jobs, settings | Many small reads and writes. Needs transactions, filters, and joins | Relational database. Document database | **Postgres** |
+| Rate limit counters, short-lived caches, stream replay buffers, locks | Very fast, short-lived, can be lost | Redis or Valkey. Memory inside each server | **Redis or Valkey** |
+| Uploaded files, parsed text, exports | Large objects, written once, read rarely | Object storage | **Object storage** |
+| Chunks, embeddings, access lists | Vector and keyword search with filters | See [Key decisions](/docs/architecture/decisions#4-vector-store) | Depends on scale and team |
+| Usage and analytics | Large scans and aggregations | Same database. A data warehouse | **Same database** until reports slow down the app |
+| Audit events | Append-only, kept for years, rarely read | Append-only table. Separate log store. Write-once storage | **Append-only table**, exported to write-once storage if compliance requires |
+
+## Conversations and messages
+
+Messages are the fastest-growing table and the one users read most.
+
+| Option | Strengths | Weaknesses |
+| --- | --- | --- |
+| **Relational database** | Transactions across conversation, message, sources, and usage. Easy reporting and deletion queries. Row-level security for tenants | Needs partitioning or archiving at very large volume |
+| **Document database** (MongoDB, DynamoDB) | A conversation can be one document. Scales out easily | Cross-entity queries, such as "every answer that cited this document", are hard. Lineage and deletion get harder |
+| **Wide-column store** (Cassandra) | Huge write volume | Limited queries. Operational weight. Rarely needed for chat |
+
+**Default:** Postgres. Lineage and deletion both depend on queries that join messages to the documents they used, and those are easy in a relational database. When the messages table grows large, partition it by time and move old partitions to cheaper storage.
+
+## Can it be rebuilt?
+
+Ask this of every store: **if it were wiped, could you rebuild it, and how long would it take?**
+
+| Store | Rebuildable? | What that means |
+| --- | --- | --- |
+| Postgres | No | Backups and point-in-time recovery are required |
+| Object storage | No, for uploads | Versioning and replication. Parsed text can be regenerated |
+| Search index | Yes, from sources and object storage, but slowly | Hours to days for a large corpus, plus embedding cost. Keep snapshots anyway |
+| Redis | Yes, it is disposable | Users may need to retry a stream. Nothing is lost |
+
+See [Backups](/docs/data/backups) and [Disaster recovery](/docs/deployment/disaster-recovery).
+
+## Caching
+
+| Option | Strengths | Weaknesses |
+| --- | --- | --- |
+| **No cache** | Always correct | Repeated work on every request |
+| **Memory inside each server** | Fastest. No network call | Each instance has its own copy. Invalidation is per instance |
+| **Shared cache** (Redis) | One copy for all instances. Can be invalidated centrally | A network call. Another dependency |
+
+What is worth caching:
+
+| Cache | Good candidate? | Why |
+| --- | --- | --- |
+| A user's resolved groups and principals | Yes, for a few minutes | Expensive to resolve, needed on every turn. Invalidate on group changes |
+| Tenant settings and prompt templates | Yes | Read on every request, change rarely |
+| Conversation list | Sometimes | Cheap to query with the right index |
+| Model answers shared across users | **Rarely** | An answer built from one user's permitted documents can leak to another user. Only safe when the cache key includes everything that shaped the answer, permissions included |
+
+Model-level caching, such as provider prompt caching, is covered in [Caching and cost](/docs/ai-model/caching-cost).
+
+## Scaling the database
+
+| Option | Strengths | Weaknesses |
+| --- | --- | --- |
+| **Bigger instance** | No code changes | A ceiling, and cost rises steeply |
+| **Read replicas** for lists and reports | Takes read load off the primary | Replicas lag, so a user may not see a message they just sent unless that read goes to the primary |
+| **Partition large tables by time** | Old data is cheap to archive or drop | Queries must include the partition key to stay fast |
+| **Separate instance for vector search** | Vector load does not slow app queries | Another database to run |
+| **Shard by tenant** | Near-unlimited scale. Isolates large tenants | Cross-tenant reports and migrations get much harder |
+
+**Default:** a bigger instance and a separate vector instance first, then read replicas, then time partitioning. Few assistants need sharding.
+
+## Checklist
+
+- [ ] Each kind of data lives in a store suited to its access pattern.
+- [ ] Every store has a known answer to "can it be rebuilt, and how long would it take?"
+- [ ] Stores that cannot be rebuilt have tested backups.
+- [ ] Nothing in Redis is the only copy of something users need.
+- [ ] Caches never serve one user's permitted content to another user.
+- [ ] Reads that must reflect the user's own latest write go to the primary.

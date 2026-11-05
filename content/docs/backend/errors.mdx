@@ -1,99 +1,98 @@
 ---
 title: Errors
-description: The single error format used by every endpoint and stream, and the reference list of error codes with their HTTP status, meaning, and whether a retry can help.
+description: The single error shape used by every endpoint and stream, the options for that shape, how errors work once a stream has started, and the reference list of error codes.
 ---
 
-Every endpoint and every stream reports errors in the same shape, with a stable machine-readable code. Clients branch on the code, never on the message text or the HTTP status alone. This page is the reference.
+Every endpoint and every stream reports errors in the same shape, with a stable machine-readable code. Clients branch on the code, never on the message text or the HTTP status alone. This page covers the design choices and is the reference for the codes.
 
-## Error format
+## Choosing an error shape
 
-```json
-{
-  "error": {
-    "code": "rate_limited",
-    "message": "Too many messages. Try again in 18 seconds.",
-    "retryable": true,
-    "retry_after_ms": 18000,
-    "trace_id": "7f3a9c2e5b1d",
-    "details": {}
-  }
-}
-```
+| Option | Strengths | Weaknesses |
+| --- | --- | --- |
+| **HTTP status only** | Nothing to design | Too coarse. A 429 could be a short rate limit or a quota exhausted until next month |
+| **Your own error object** | Fits your needs exactly, including fields such as retryable and trace ID | Clients and tools learn your format |
+| **Problem Details** (RFC 9457) | An IETF standard with existing tooling. Extensible with your own fields | Its field names may not match your conventions |
+
+**Default:** one error object everywhere, either your own or Problem Details extended with your fields. Consistency matters more than which you pick.
+
+## Error fields
 
 | Field | Rules |
 | --- | --- |
-| `code` | Stable `snake_case` string. Never changes meaning once published. Clients switch on this |
-| `message` | Human-readable, safe to show to end users. No stack traces, SQL, internal hostnames, or prompt text |
-| `retryable` | `true` only if the same request can succeed later without changes |
-| `retry_after_ms` | Present when the server knows when to retry |
-| `trace_id` | Links to logs and traces. Shown in the UI as a reference |
-| `details` | Optional structured data, such as which field failed validation |
+| Code | Stable lowercase identifier, such as rate_limited. Never changes meaning once published. Clients switch on this |
+| Message | Human-readable and safe to show end users. No stack traces, queries, internal hostnames, or prompt text |
+| Retryable | True only if the same request can succeed later without changes |
+| Retry after | Present when the server knows when to retry |
+| Trace ID | Links to logs and traces. Shown in the UI as a reference for support |
+| Details | Optional structured data, such as which field failed validation |
 
-In an SSE stream, the same object is sent as an `error` event, and the stream ends:
+## Errors during a stream
 
-```text
-event: error
-data: {"code":"provider_unavailable","message":"The AI service is temporarily unavailable.","retryable":true,"trace_id":"7f3a9c2e5b1d"}
-```
+Once a stream has started, the HTTP status has already been sent as 200 and cannot change. Errors after that point travel as an error event with the same fields, and the stream ends. The code inside the event is the source of truth.
 
-If the stream has already started, the HTTP status is already `200`. That is why the code inside the event, not the status, is the source of truth.
+What happens to the partial answer:
 
-## Error code reference
+| Option | User experience | Fits when |
+| --- | --- | --- |
+| **Keep the partial text, marked incomplete** | The user keeps what they read and can retry | Provider failures, timeouts, user stop |
+| **Remove the partial text** | Nothing misleading remains | The output guardrail withheld the answer |
+
+## Error codes
 
 ### Request and auth
 
 | Code | HTTP | Retryable | Meaning |
 | --- | --- | --- | --- |
-| `invalid_request` | 400 | No | Malformed body or invalid parameter. `details` lists the fields |
-| `unauthorized` | 401 | After re-auth | Missing, invalid, or expired credentials |
-| `forbidden` | 403 | No | Authenticated, but not allowed to use this feature or resource |
-| `not_found` | 404 | No | The resource does not exist, or the user cannot see it. Do not distinguish the two, or you leak existence |
-| `conflict` | 409 | Sometimes | Idempotency key in progress, or a state conflict such as confirming an already-rejected tool call |
-| `payload_too_large` | 413 | No | Message or file over the size limit |
-| `unsupported_media_type` | 415 | No | File type not supported for upload |
+| invalid_request | 400 | No | Malformed body or invalid parameter. Details list the fields |
+| unauthorized | 401 | After re-auth | Missing, invalid, or expired credentials |
+| forbidden | 403 | No | Authenticated, but not allowed to use this feature or resource |
+| not_found | 404 | No | The resource does not exist, or the user cannot see it. Do not distinguish the two, or you leak existence |
+| conflict | 409 | Sometimes | Same request already in progress, or a state conflict such as confirming an already-rejected tool call |
+| payload_too_large | 413 | No | Message or file over the size limit |
+| unsupported_media_type | 415 | No | File type not supported for upload |
 
 ### Limits
 
 | Code | HTTP | Retryable | Meaning |
 | --- | --- | --- | --- |
-| `rate_limited` | 429 | Yes | Too many requests in a short period. `retry_after_ms` is set |
-| `quota_exceeded` | 429 | Yes, after reset | Daily or monthly token or budget quota used. `details.resets_at` is set |
-| `concurrency_limited` | 429 | Yes | Too many open streams or jobs for this user |
+| rate_limited | 429 | Yes | Too many requests in a short period. Retry time is set |
+| quota_exceeded | 429 | Yes, after reset | Daily or monthly token or budget quota used. Reset time is set |
+| concurrency_limited | 429 | Yes | Too many open streams or jobs for this user |
 
 ### AI processing
 
 | Code | HTTP | Retryable | Meaning |
 | --- | --- | --- | --- |
-| `input_blocked` | 422 | No | Input guardrail rejected the message. `details.category` gives a safe category name |
-| `output_blocked` | 200 in stream | No | Output guardrail withheld the answer |
-| `context_too_long` | 422 | No | Conversation plus attachments exceed what the model can read, even after trimming |
-| `provider_unavailable` | 503 | Yes | All model providers and fallbacks failed |
-| `timeout` | 504 | Yes | The model or a critical step exceeded its deadline |
-| `agent_step_limit` | 200 in stream | No | The agent reached its maximum number of steps without finishing |
+| input_blocked | 422 | No | The input guardrail rejected the message. Details give a safe category name |
+| output_blocked | In stream | No | The output guardrail withheld the answer |
+| context_too_long | 422 | No | Conversation plus attachments exceed what the model can read, even after trimming |
+| provider_unavailable | 503 | Yes | All model providers and fallbacks failed |
+| timeout | 504 | Yes | The model or a critical step exceeded its deadline |
+| agent_step_limit | In stream | No | The agent reached its maximum number of steps without finishing |
 
 ### Tools
 
 | Code | HTTP | Retryable | Meaning |
 | --- | --- | --- | --- |
-| `tool_not_allowed` | 403 | No | The tool is disabled for this tenant or user |
-| `tool_auth_required` | 401 | After connecting | The user must connect their account in the target system |
-| `tool_failed` | 502 | Depends | The target system returned an error. `details.target_message` holds its safe message |
-| `tool_rejected` | 200 in stream | No | The user rejected the action. Not an error for the user, but reported for completeness |
+| tool_not_allowed | 403 | No | The tool is disabled for this tenant or user |
+| tool_auth_required | 401 | After connecting | The user must connect their account in the target system |
+| tool_failed | 502 | Depends | The target system returned an error. Details hold its safe message |
+| tool_rejected | In stream | No | The user rejected the action. Reported for completeness, not shown as an error |
 
 ### Documents and jobs
 
 | Code | HTTP | Retryable | Meaning |
 | --- | --- | --- | --- |
-| `upload_failed` | 422 | No | File unreadable: encrypted, corrupt, or empty. `details.reason` says which |
-| `ocr_required` | 422 | No | Scanned file with no text layer, and OCR is not enabled |
-| `job_failed` | 200 on job status | Depends | Background job ended in failure. `details` holds the reason |
+| upload_failed | 422 | No | File unreadable: encrypted, corrupt, or empty. Details say which |
+| ocr_required | 422 | No | Scanned file with no text layer, and OCR is not enabled |
+| job_failed | On job status | Depends | A background job ended in failure. Details hold the reason |
 
 ### Server
 
 | Code | HTTP | Retryable | Meaning |
 | --- | --- | --- | --- |
-| `internal` | 500 | Yes | Unexpected error. Always logged with full context, never shown in detail to users |
-| `maintenance` | 503 | Yes | Planned maintenance. `retry_after_ms` is set when known |
+| internal | 500 | Yes | Unexpected error. Always logged with full context, never shown in detail to users |
+| maintenance | 503 | Yes | Planned maintenance. Retry time is set when known |
 
 ## Writing error messages
 
@@ -111,8 +110,8 @@ The internal detail still matters for debugging. Put it in the logs under the sa
 
 Error paths are a common source of data leaks.
 
-- **No prompt content.** A provider error can echo part of the prompt, including retrieved documents the user should not see in that form. Strip provider error bodies before building a response.
-- **No existence leaks.** Return `not_found` for documents the user cannot access, the same as for documents that do not exist.
+- **No prompt content.** A provider error can echo part of the prompt, including retrieved documents. Never pass provider error bodies through.
+- **No existence leaks.** Return not_found for documents the user cannot access, the same as for documents that do not exist.
 - **No internal topology.** Hostnames, service names, and stack traces stay in logs.
 - **No guardrail internals.** Give a category such as "sensitive personal data", not the rule or classifier score, or attackers can tune their inputs against it.
 
@@ -122,13 +121,13 @@ Error paths are a common source of data leaks.
 2. Add the code to the shared error definitions used by backend and frontend.
 3. Add a user-facing message and action to the frontend's error mapping. See [Error and empty states](/docs/frontend/error-states).
 4. Add it to this page.
-5. Add an alert if the code indicates a system problem rather than a user problem.
+5. Add an alert if the code signals a system problem rather than a user problem.
 
 ## Checklist
 
-- [ ] All endpoints and streams use the same error object.
-- [ ] Clients switch on `code`, not on message text.
-- [ ] `retryable` is accurate for every code.
+- [ ] All endpoints and streams use the same error shape.
+- [ ] Clients switch on the code, not on message text.
+- [ ] The retryable flag is accurate for every code.
 - [ ] Messages are safe for end users, and internal details are only in logs.
 - [ ] Provider error bodies are never passed through.
-- [ ] `not_found` is returned for resources the user cannot see.
+- [ ] not_found is returned for resources the user cannot see.

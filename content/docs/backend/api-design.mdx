@@ -1,24 +1,22 @@
 ---
 title: API Design
-description: The resources and endpoints of the assistant's API, the conventions they follow, and how to handle idempotency, pagination, long-running work, and versioning.
+description: The shape of the assistant's API, including style, resources, streaming, idempotency, pagination, long-running work, versioning, and the public API, with the options and trade-offs for each.
 ---
 
 import { IdempotencyDemo } from "@/components/demos/api-design";
 
-A consistent API makes the frontend simpler, makes integrations possible, and makes the system easier to reason about. This page defines the conventions and the main endpoints. Treat it as the contract: generate an OpenAPI specification from your code or write it first, and test against it.
+The API is the contract between the backend and every client: the web app, a mobile app, and customer integrations. Make each decision on this page once and apply it everywhere. Publish the contract as a specification, such as OpenAPI, and check it against the implementation in CI.
 
-## Conventions
+## API style
 
-| Topic | Convention |
-| --- | --- |
-| Style | REST over HTTPS with JSON bodies. Streaming endpoints return `text/event-stream` |
-| Paths | Plural nouns, nested only one level: `/conversations/:id/messages`, not deeper |
-| IDs | Prefixed, opaque strings: `conv_8f2k`, `msg_91xa`, `doc_7hq2`. The prefix makes logs readable and mistakes obvious |
-| Timestamps | ISO 8601 in UTC: `2026-03-14T09:30:00Z` |
-| Field names | `snake_case` in JSON, consistently |
-| Tenant | Never in the path or body. Always from the auth token |
-| Errors | One error format everywhere. See [Errors](/docs/backend/errors) |
-| Spec | OpenAPI 3, published, and checked in CI against the implementation |
+| Option | Strengths | Weaknesses | Fits when |
+| --- | --- | --- | --- |
+| **REST with JSON** | Universal. Works with every client, proxy, cache, and tool. Easy for customers to call | Several calls for nested data. Contract discipline is up to you | Public and browser-facing APIs |
+| **GraphQL** | Clients fetch exactly the fields they need in one call | Streaming, caching, rate limiting by cost, and authorization per field are all harder | Many clients with very different data needs |
+| **gRPC** | Typed contracts, fast binary format, built-in streaming | Browsers need a proxy. Harder for customers to call by hand | Internal service-to-service calls |
+| **Typed RPC from shared code** | One language end to end with compile-time types and little boilerplate | Ties clients to your language and codebase. Not a public API | One team owns both frontend and backend in the same language |
+
+**Default:** REST with JSON for everything clients call, with streaming responses for chat. Use gRPC between internal services only if you already run it.
 
 ## Resources
 
@@ -35,136 +33,119 @@ erDiagram
   TENANT ||--o{ CONNECTOR : configures
 ```
 
-## Endpoints
+| Resource | Operations | Notes |
+| --- | --- | --- |
+| Conversations | Create, list, rename, archive, delete | The first message can create a conversation, so explicit creation is optional |
+| Messages | Send, regenerate, stop, resume a stream, give feedback | Sending and regenerating return a stream |
+| Tool calls | Confirm, with optional edited arguments, or reject | Actions with side effects wait here for the user |
+| Documents | Get an upload URL, register an upload, list, delete | Files go straight to object storage, not through the API |
+| Jobs | Get status and progress | One shape for every kind of background work |
+| Admin | Settings, connectors, manual sync, usage, audit events | Admin-only, with stricter permission checks |
 
-### Conversations and messages
+## Conventions
 
-| Method and path | Purpose |
+| Topic | Convention | Why |
+| --- | --- | --- |
+| Paths | Plural nouns, nested at most one level | Short, predictable URLs |
+| IDs | Prefixed and opaque, such as conv_8f2k or msg_91xa | The prefix makes logs readable and wrong-type mistakes obvious |
+| Timestamps | ISO 8601 in UTC | No time zone ambiguity |
+| Field names | One casing everywhere | Clients do not need per-endpoint mapping |
+| Tenant | Taken only from the verified token | A client cannot ask for another tenant's data |
+| Errors | One format for every endpoint and stream | Clients handle errors in one place. See [Errors](/docs/backend/errors) |
+
+## What clients control
+
+| Clients may send | The server decides |
 | --- | --- |
-| `POST /conversations` | Create an empty conversation. Optional, since the first message can create one |
-| `GET /conversations?cursor=&limit=` | List the user's conversations, newest first |
-| `GET /conversations/:id` | Get one conversation with metadata |
-| `PATCH /conversations/:id` | Rename, archive |
-| `DELETE /conversations/:id` | Delete a conversation and its messages |
-| `GET /conversations/:id/messages?before=&limit=` | Page through messages, newest first |
-| `POST /conversations/:id/messages` | Send a message. Returns an SSE stream |
-| `POST /messages/:id/regenerate` | Generate a new answer for the same user message. Returns an SSE stream |
-| `POST /messages/:id/cancel` | Stop generation |
-| `GET /messages/:id/stream` | Resume a dropped stream, with the `Last-Event-ID` header |
-| `POST /messages/:id/feedback` | Rating, reasons, and comment |
-| `POST /tool-calls/:id/confirm` | Approve a pending tool action, with optional edited arguments |
-| `POST /tool-calls/:id/reject` | Reject a pending tool action |
+| The message text and attachments | Which model answers |
+| A named mode, such as "fast" or "thorough" | The system prompt and prompt version |
+| Answer language preference | Temperature and other sampling settings |
+| Which conversation to continue | Which tools are available |
 
-### Documents and jobs
+If clients could set the model or system prompt, any user could change the assistant's behavior and bypass its controls. Offer choices as named modes that the server maps to configurations.
 
-| Method and path | Purpose |
-| --- | --- |
-| `POST /uploads` | Get a pre-signed URL to upload a file directly to storage |
-| `POST /documents` | Register an uploaded file and start ingestion. Returns `202` with a job ID |
-| `GET /documents?cursor=&limit=` | List documents the user uploaded |
-| `DELETE /documents/:id` | Delete a document, its chunks, and its file |
-| `GET /jobs/:id` | Status and progress of any background job |
+## Streaming transport
 
-### Admin
+| Option | Strengths | Weaknesses | Fits when |
+| --- | --- | --- | --- |
+| **Server-sent events (SSE)** | Plain HTTP. Works through most proxies. Simple to resume with event IDs | One direction only: server to client | Chat answers, job progress |
+| **WebSocket** | Two directions on one connection | Separate auth, heartbeats, and sticky routing. Some proxies need configuration | The client also streams, such as live voice |
+| **Long polling** | Works almost everywhere | Higher latency and more requests | Very restrictive networks |
+| **Poll for the finished answer** | Simplest client | No progressive output. A 10 second answer feels broken | Non-interactive integrations |
 
-| Method and path | Purpose |
-| --- | --- |
-| `GET /admin/settings`, `PATCH /admin/settings` | Tenant settings: models, retention, guardrails, enabled tools |
-| `GET /admin/connectors`, `POST /admin/connectors` | List and add data source connectors |
-| `POST /admin/connectors/:id/sync` | Start a manual sync. Returns a job ID |
-| `GET /admin/usage?from=&to=&group_by=` | Token usage and cost by user, team, or model |
-| `GET /admin/audit-events?cursor=` | Audit log |
-
-## Sending a message
-
-Request:
-
-```http
-POST /conversations/conv_8f2k/messages
-Content-Type: application/json
-Accept: text/event-stream
-Idempotency-Key: 5b0c3c7e-4c8b-4a9e-9a43-1f2d9c1e7a11
-
-{
-  "text": "What is the travel budget for a client visit to Singapore?",
-  "attachments": ["doc_7hq2"],
-  "options": { "answer_language": "auto" }
-}
-```
-
-Response: an event stream as described in [Streaming](/docs/frontend/streaming). The first event is `meta` with the server message IDs, and the last is `done` or `error`.
-
-Note what the request does **not** contain: no model name chosen freely by the client, no system prompt, no temperature. Those are server decisions, set by tenant settings and prompt templates. Exposing them lets any user change the assistant's behavior and bypass controls. If you offer choices, such as "fast" versus "thorough" modes, expose them as named modes that the server maps to configurations.
+**Default:** SSE. Treat the event types as part of the API: a status line, text tokens, citations, tool call updates, an error, and a final done event with usage. See [Streaming](/docs/frontend/streaming) for the frontend side.
 
 ## Idempotency
 
-Networks fail after the server has done the work but before the client got the response. The client retries, and without protection you get two messages, two tickets, or two ingestion jobs.
+Networks fail after the server has done the work but before the client receives the response. The client retries, and without protection you get two messages, two tickets, or two ingestion jobs.
 
-Every `POST` that creates something accepts an `Idempotency-Key` header, a UUID generated by the client.
+The client sends a unique key with every request that creates something. The server remembers the key and the result. A retry with the same key gets the stored result instead of doing the work again.
 
-How the server handles it:
+| Where to store keys | Strengths | Weaknesses |
+| --- | --- | --- |
+| **Database table with a unique constraint** | Durable. Can be written in the same transaction as the work | One more write per request |
+| **Redis with an expiry, such as 24 hours** | Fast. Expires on its own | Lost on Redis failure, so a retry at that moment can duplicate work |
+| **Natural key**, such as a client-generated message ID used as the record's ID | No extra storage. The database rejects duplicates | Only works where the client creates the ID |
 
-1. Look up the key, scoped to the user, in a table or Redis with a 24 hour expiry.
-2. If not found, store it as "in progress", do the work, and store the result.
-3. If found and finished, return the stored result without doing the work again.
-4. If found and still in progress, return `409 Conflict`, or for message streams, attach to the existing stream.
+When a duplicate arrives while the first request is still running, return a conflict, or for message streams, attach the retry to the stream already in progress.
 
-Tool confirmations need this most. Confirming "create ticket" twice must create one ticket.
+**Default:** client-generated message IDs for messages, and a database table for everything else. Tool confirmations need idempotency most: confirming "create ticket" twice must create one ticket.
 
 <IdempotencyDemo />
 
 ## Pagination
 
-Use **cursor pagination**, not page numbers. New messages arrive constantly, and page numbers shift and skip items.
+| Option | Strengths | Weaknesses |
+| --- | --- | --- |
+| **Offset and page number** | Simple. Clients can jump to page 7 | Items shift as new ones arrive, so users see duplicates or miss items. Slow on deep pages |
+| **Cursor** | Stable while data changes. Fast at any depth | No jumping to an arbitrary page |
+| **Time range** | Natural for logs and usage reports | Needs a tie-breaker when many items share a timestamp |
 
-```http
-GET /conversations?limit=20
-```
-
-```json
-{
-  "data": [ { "id": "conv_8f2k", "title": "Singapore travel budget", "updated_at": "2026-03-14T09:30:00Z" } ],
-  "next_cursor": "eyJ1cGRhdGVkX2F0IjoiMjAyNi0wMy0xNFQwOTozMDowMFoiLCJpZCI6ImNvbnZfOGYyayJ9"
-}
-```
-
-The cursor encodes the sort key and the ID of the last item. It is opaque to clients. Cap `limit`, for example at 100.
+**Default:** cursor pagination with a capped page size, such as 100. Conversations and messages change constantly, which rules out offsets. The cursor is opaque to clients.
 
 ## Long-running work
 
-Anything that takes more than a few seconds and is not a chat stream returns `202 Accepted` with a job:
+Anything that takes more than a few seconds and is not a chat stream returns immediately with a job the client can follow.
 
-```json
-{ "job_id": "job_3k9s", "status": "queued", "status_url": "/jobs/job_3k9s" }
-```
+| How the client learns the outcome | Fits when |
+| --- | --- |
+| **Polls the job** | Default. Simple, and works after the user leaves and returns |
+| **Receives push events** on a live connection | The user watches many jobs, or a live connection already exists |
+| **Receives a webhook** | Customer integrations that run unattended |
 
-Clients poll `GET /jobs/:id` or subscribe to job events. See [Sync and async work](/docs/backend/sync-async).
+See [Sync and async work](/docs/backend/sync-async).
 
 ## Versioning
 
-- Put the major version in the path: `/v1/...`. Breaking changes get `/v2`. Most teams never need v2 if they follow the additive rule below.
-- **Additive changes are not breaking.** New fields, new endpoints, new event types, and new optional parameters are allowed in v1. Clients must ignore unknown fields and unknown event types.
-- **Breaking changes**: removing or renaming a field, changing a type, changing what an error code means, making an optional parameter required.
-- **Deprecation**: announce at least 6 months ahead for external API consumers, return a `Deprecation` header and a `Sunset` header on old endpoints, and track who still calls them before removing.
+| Option | Strengths | Weaknesses |
+| --- | --- | --- |
+| **Major version in the path**, such as v1 | Obvious in every log line and URL | Coarse. A new major version is a large migration |
+| **Version in a header** | Clean URLs | Easy to forget. Invisible in logs unless recorded |
+| **Dated versions pinned per client** | Small, frequent breaking changes without a big migration | You maintain transformations between many versions |
+| **Additive changes only** | Nothing to migrate | Requires discipline. Mistakes leave you stuck with them |
 
-The SSE event protocol is part of the API. Version it the same way. A new event type is additive. Changing the payload of `token` is breaking.
+**Default:** a major version in the path, combined with an additive-only rule inside it. New fields, endpoints, and event types are allowed. Clients must ignore what they do not recognize. Breaking changes are removing or renaming a field, changing a type, changing what an error code means, or making an optional parameter required.
+
+When something must go, announce it well ahead, return deprecation and sunset headers, and track who still calls it before removing it. The streaming event protocol follows the same rules: a new event type is additive, while changing the payload of an existing one is breaking.
 
 ## Public API for integrations
 
-Customers will want to call the assistant from their own tools: a Slack bot, a CRM sidebar, a script.
+Customers will call the assistant from their own tools: a Slack bot, a CRM sidebar, a script.
 
-- Issue **API keys per tenant** with scopes, managed by admins, and shown only once at creation.
-- API keys act as a service identity, not a user. Decide which documents they can access. A common choice is "only documents shared with a named integration group".
-- Apply the same rate limits, guardrails, and logging as the UI.
-- Offer a non-streaming mode for simple integrations: the same endpoint with `Accept: application/json` returns the full answer when done.
+| Option | Identity | Strengths | Weaknesses |
+| --- | --- | --- | --- |
+| **Tenant API keys** | A service identity owned by the tenant | Simple for customers | Long-lived secrets. Which documents can a key see? |
+| **OAuth client credentials** | A registered application | Short-lived tokens, standard tooling | More setup for customers |
+| **OAuth on behalf of a user** | A real user | The integration sees exactly what the user can see | Each user must connect. Not suited to unattended bots |
+
+**Default:** tenant API keys with scopes, managed by admins and shown only once. Decide which documents a key can read, for example only documents shared with a named integration group. Apply the same rate limits, guardrails, and logging as the UI, and offer a non-streaming mode for simple integrations.
 
 ## Checklist
 
-- [ ] The OpenAPI spec is published and checked in CI.
-- [ ] IDs are prefixed and opaque.
+- [ ] The API specification is published and checked in CI.
 - [ ] Tenant comes only from the token.
-- [ ] Clients cannot set system prompts, raw model names, or sampling parameters.
-- [ ] Every creating `POST` supports `Idempotency-Key`.
-- [ ] Lists use cursor pagination with a capped limit.
-- [ ] Long work returns `202` with a job ID.
-- [ ] Clients ignore unknown fields and event types, and the server only makes additive changes within a version.
+- [ ] Clients cannot set system prompts, raw model names, or sampling settings.
+- [ ] Every request that creates something can be retried safely.
+- [ ] Lists use cursor pagination with a capped page size.
+- [ ] Long work returns a job.
+- [ ] Changes within a version are additive, and clients ignore unknown fields and event types.
